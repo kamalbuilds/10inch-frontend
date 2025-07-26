@@ -1,24 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowDownUp, Settings, Info, Loader2 } from "lucide-react";
+import { ArrowDownUp, Loader2 } from "lucide-react";
 import { ChainSelector } from "@/components/ChainSelector";
 import { TokenSelector } from "@/components/TokenSelector";
+import { WalletConnect } from "@/components/WalletConnect";
+import { useWallet } from "@/hooks/useWallet";
+import { fusionPlusService } from "@/services/fusionPlusService";
 import {
   SUPPORTED_CHAINS,
   DEFAULT_TOKENS,
   NON_EVM_CHAINS,
   type Token,
-  type ChainConfig,
 } from "@/config/tokens";
 
 export default function SwapInterface() {
+  const { isConnected, address, chainId, signer } = useWallet();
   const [fromChain, setFromChain] = useState<number>(1);
   const [toChain, setToChain] = useState<number>(137);
   const [fromToken, setFromToken] = useState<string>("USDC");
@@ -28,12 +31,59 @@ export default function SwapInterface() {
   const [isLoading, setIsLoading] = useState(false);
   const [swapMode, setSwapMode] = useState<"simple" | "fusion">("fusion");
 
+  // Update quote when amount changes
+  useEffect(() => {
+    if (fromAmount && parseFloat(fromAmount) > 0) {
+      const updateQuote = async () => {
+        try {
+          const quote = await fusionPlusService.getSwapQuote({
+            fromChain,
+            toChain,
+            fromToken,
+            toToken,
+            amount: fromAmount,
+          });
+          setToAmount(quote.toAmount);
+        } catch (error) {
+          console.error("Error updating quote:", error);
+        }
+      };
+      updateQuote();
+    } else {
+      setToAmount("");
+    }
+  }, [fromAmount, fromChain, toChain, fromToken, toToken]);
+
   const handleSwap = async () => {
+    if (!isConnected || !signer) {
+      alert("Please connect your wallet first");
+      return;
+    }
+
     setIsLoading(true);
-    // TODO: Implement swap logic
-    setTimeout(() => {
+    try {
+      const txHash = await fusionPlusService.executeSwap(
+        {
+          fromChain,
+          toChain,
+          fromToken,
+          toToken,
+          amount: fromAmount,
+          recipient: address!,
+        },
+        signer
+      );
+      
+      alert(`Swap initiated! Transaction: ${txHash}`);
+      // Reset form
+      setFromAmount("");
+      setToAmount("");
+    } catch (error) {
+      console.error("Swap failed:", error);
+      alert("Swap failed. Please try again.");
+    } finally {
       setIsLoading(false);
-    }, 2000);
+    }
   };
 
   const switchChains = () => {
@@ -52,6 +102,10 @@ export default function SwapInterface() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted p-4">
       <div className="max-w-2xl mx-auto pt-10">
+        <div className="flex justify-end mb-4">
+          <WalletConnect />
+        </div>
+        
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold mb-2">Fusion Plus Swap</h1>
           <p className="text-muted-foreground">
@@ -136,36 +190,18 @@ export default function SwapInterface() {
             <div className="space-y-2">
               <Label>To</Label>
               <div className="flex gap-2">
-                <Select
-                  value={toChain.toString()}
-                  onValueChange={(v) => setToChain(Number(v))}
-                >
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SUPPORTED_CHAINS.map((chain) => (
-                      <SelectItem key={chain.id} value={chain.id.toString()}>
-                        <div className="flex items-center gap-2">
-                          <span>{chain.name}</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <ChainSelector
+                  chains={SUPPORTED_CHAINS}
+                  selectedChain={toChain}
+                  onSelect={setToChain}
+                />
                 
-                <Select value={toToken} onValueChange={setToToken}>
-                  <SelectTrigger className="w-[120px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {getTokensForChain(toChain).map((token) => (
-                      <SelectItem key={token.symbol} value={token.symbol}>
-                        {token.symbol}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <TokenSelector
+                  tokens={getTokensForChain(toChain)}
+                  selectedToken={toToken}
+                  onSelect={setToToken}
+                  chainName={SUPPORTED_CHAINS.find(c => c.id === toChain)?.name || ""}
+                />
                 
                 <Input
                   type="number"
@@ -200,10 +236,12 @@ export default function SwapInterface() {
             <Button
               className="w-full"
               size="lg"
-              onClick={handleSwap}
-              disabled={!fromAmount || isLoading}
+              onClick={isConnected ? handleSwap : undefined}
+              disabled={!isConnected ? false : (!fromAmount || isLoading)}
             >
-              {isLoading ? (
+              {!isConnected ? (
+                "Connect Wallet"
+              ) : isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Processing...

@@ -1,4 +1,4 @@
-# Fusion Plus UI
+# NON EVM Supported 1inch Fusion + UI
 
 A modern, responsive web interface for cross-chain token swaps powered by Fusion Plus technology.
 

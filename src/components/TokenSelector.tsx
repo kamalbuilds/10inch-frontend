@@ -20,13 +20,15 @@ interface TokenSelectorProps {
   selectedToken: string;
   onSelect: (token: string) => void;
   chainName: string;
+  className?: string;
 }
 
-export function TokenSelector({
+export default function TokenSelector({
   tokens,
   selectedToken,
   onSelect,
   chainName,
+  className,
 }: TokenSelectorProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -42,7 +44,7 @@ export function TokenSelector({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="w-[120px] justify-between">
+        <Button variant="outline" className={`w-[120px] justify-between ${className || ''}`}>
           {currentToken ? (
             <>
               <span>{currentToken.symbol}</span>
@@ -56,7 +58,7 @@ export function TokenSelector({
           )}
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className={`sm:max-w-[425px] ${className || ''}`}>
         <DialogHeader>
           <DialogTitle>Select a token</DialogTitle>
           <DialogDescription>
@@ -66,12 +68,17 @@ export function TokenSelector({
         <div className="space-y-4 mt-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search by name or symbol"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-            />
+            <select
+              value={selectedToken}
+              onChange={(e) => onSelect(e.target.value)}
+              className={`flex-1 bg-[#1e2a47] text-gray-300 border-[#1e2a47] rounded-md px-3 py-2 focus-visible:ring-blue-500 ${className || ''}`}
+            >
+              {filteredTokens.map((token) => (
+                <option key={token.address} value={token.symbol} className="text-gray-300 bg-[#0a192f]">
+                  {token.symbol} - {token.name}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="space-y-2 max-h-[300px] overflow-y-auto">
             {filteredTokens.map((token) => (

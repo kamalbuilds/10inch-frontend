@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,8 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowDownUp, Loader2 } from "lucide-react";
-import { ChainSelector } from "@/components/ChainSelector";
-import { TokenSelector } from "@/components/TokenSelector";
+import ChainSelector from "@/components/ChainSelector";
+import TokenSelector from "@/components/TokenSelector";
 import { WalletConnect } from "@/components/WalletConnect";
 import { useWallet } from "@/hooks/useWallet";
 import { fusionPlusService } from "@/services/fusionPlusService";
@@ -30,6 +31,22 @@ export default function SwapInterface() {
   const [toAmount, setToAmount] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [swapMode, setSwapMode] = useState<"simple" | "fusion">("fusion");
+
+  // Add animation variants
+  const container = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1
+      }
+    }
+  };
+
+  const item = {
+    hidden: { opacity: 0, y: 20 },
+    show: { opacity: 1, y: 0 }
+  };
 
   // Update quote when amount changes
   useEffect(() => {
@@ -100,119 +117,172 @@ export default function SwapInterface() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted p-4">
-      <div className="max-w-2xl mx-auto pt-10">
-        <div className="flex justify-end mb-4">
+    <div className="min-h-screen bg-gradient-to-b from-[#0a192f] to-[#1e2a47] p-4">
+      <div className="max-w-4xl mx-auto pt-10">
+        <motion.div
+          className="flex justify-end mb-4"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
           <WalletConnect />
-        </div>
+        </motion.div>
         
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold mb-2">Fusion Plus Swap</h1>
-          <p className="text-muted-foreground">
+        <motion.div
+          className="text-center mb-8"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+        >
+          <h1 className="text-4xl md:text-5xl font-bold mb-2 text-white">
+            Fusion Plus Swap
+          </h1>
+          <p className="text-gray-400 text-lg">
             Cross-chain swaps powered by atomic swaps and HTLC technology
           </p>
-        </div>
+        </motion.div>
 
-        <Card className="shadow-xl">
+        <motion.div
+          className="bg-gradient-to-br from-[#1e2a47] to-[#0a192f] rounded-2xl shadow-xl"
+          variants={container}
+          initial="hidden"
+          animate="show"
+        >
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Swap Tokens</CardTitle>
+            <motion.div
+              className="flex items-center justify-between"
+              variants={item}
+            >
+              <CardTitle className="text-white">Swap Tokens</CardTitle>
               <div className="flex gap-2">
-                <Badge variant={swapMode === "simple" ? "default" : "secondary"}>
+                <Badge 
+                  variant={swapMode === "simple" ? "default" : "secondary"}
+                  className="bg-gradient-to-r from-purple-500 to-pink-500 text-white"
+                >
                   Simple Mode
                 </Badge>
-                <Badge variant={swapMode === "fusion" ? "default" : "secondary"}>
+                <Badge 
+                  variant={swapMode === "fusion" ? "default" : "secondary"}
+                  className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white"
+                >
                   Fusion+ Mode
                 </Badge>
               </div>
-            </div>
+            </motion.div>
           </CardHeader>
           <CardContent className="space-y-6">
             <Tabs defaultValue="fusion" onValueChange={(v) => setSwapMode(v as any)}>
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="simple">Simple Swap</TabsTrigger>
-                <TabsTrigger value="fusion">Fusion+ Swap</TabsTrigger>
+              <TabsList className="grid w-full grid-cols-2 bg-[#0a192f]">
+                <TabsTrigger 
+                  value="simple" 
+                  className="text-white hover:bg-[#1e2a47]"
+                >
+                  Simple Swap
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="fusion" 
+                  className="text-white hover:bg-[#1e2a47]"
+                >
+                  Fusion+ Swap
+                </TabsTrigger>
               </TabsList>
               
               <TabsContent value="simple" className="mt-6">
-                <p className="text-sm text-muted-foreground mb-4">
+                <p className="text-gray-400 mb-4">
                   Direct token swaps within the same blockchain
                 </p>
               </TabsContent>
               
               <TabsContent value="fusion" className="mt-6">
-                <p className="text-sm text-muted-foreground mb-4">
+                <p className="text-gray-400 mb-4">
                   Advanced cross-chain swaps with atomic guarantees
                 </p>
               </TabsContent>
             </Tabs>
 
             {/* From Token */}
-            <div className="space-y-2">
-              <Label>From</Label>
-              <div className="flex gap-2">
-                <ChainSelector
-                  chains={SUPPORTED_CHAINS}
-                  selectedChain={fromChain}
-                  onSelect={setFromChain}
-                />
-                
-                <TokenSelector
-                  tokens={getTokensForChain(fromChain)}
-                  selectedToken={fromToken}
-                  onSelect={setFromToken}
-                  chainName={SUPPORTED_CHAINS.find(c => c.id === fromChain)?.name || ""}
-                />
-                
-                <Input
-                  type="number"
-                  placeholder="0.0"
-                  value={fromAmount}
-                  onChange={(e) => setFromAmount(e.target.value)}
-                  className="flex-1"
-                />
+            <motion.div
+              variants={item}
+              className="space-y-4"
+            >
+              <div className="flex justify-between items-center">
+                <Label className="text-gray-400">From</Label>
+                <motion.div
+                  className="flex gap-2"
+                  whileHover={{ scale: 1.02 }}
+                >
+                  <ChainSelector
+                    chains={SUPPORTED_CHAINS}
+                    selectedChain={fromChain}
+                    onSelect={setFromChain}
+                    className="bg-[#0a192f] text-white"
+                  />
+                  
+                  <TokenSelector
+                    tokens={getTokensForChain(fromChain)}
+                    selectedToken={fromToken}
+                    onSelect={setFromToken}
+                    chainName={SUPPORTED_CHAINS.find(c => c.id === fromChain)?.name || ""}
+                    className="bg-[#0a192f] text-white"
+                  />
+                  
+                  <Input
+                    type="number"
+                    placeholder="0.0"
+                    value={fromAmount}
+                    onChange={(e) => setFromAmount(e.target.value)}
+                    className="flex-1 bg-[#0a192f] text-white border-[#1e2a47] focus-visible:ring-2 focus-visible:ring-blue-500"
+                  />
+                </motion.div>
               </div>
-            </div>
 
-            {/* Swap Button */}
-            <div className="flex justify-center">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={switchChains}
-                className="rounded-full"
+              {/* Swap Button */}
+              <motion.div
+                className="flex justify-center"
+                whileHover={{ scale: 1.05 }}
               >
-                <ArrowDownUp className="h-4 w-4" />
-              </Button>
-            </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={switchChains}
+                  className="rounded-full bg-[#0a192f] hover:bg-[#1e2a47] text-white"
+                >
+                  <ArrowDownUp className="h-4 w-4" />
+                </Button>
+              </motion.div>
 
-            {/* To Token */}
-            <div className="space-y-2">
-              <Label>To</Label>
-              <div className="flex gap-2">
-                <ChainSelector
-                  chains={SUPPORTED_CHAINS}
-                  selectedChain={toChain}
-                  onSelect={setToChain}
-                />
-                
-                <TokenSelector
-                  tokens={getTokensForChain(toChain)}
-                  selectedToken={toToken}
-                  onSelect={setToToken}
-                  chainName={SUPPORTED_CHAINS.find(c => c.id === toChain)?.name || ""}
-                />
-                
-                <Input
-                  type="number"
-                  placeholder="0.0"
-                  value={toAmount}
-                  onChange={(e) => setToAmount(e.target.value)}
-                  className="flex-1"
-                  disabled
-                />
+              <div className="flex justify-between items-center">
+                <Label className="text-gray-400">To</Label>
+                <motion.div
+                  className="flex gap-2"
+                  whileHover={{ scale: 1.02 }}
+                >
+                  <ChainSelector
+                    chains={SUPPORTED_CHAINS}
+                    selectedChain={toChain}
+                    onSelect={setToChain}
+                    className="bg-[#0a192f] text-white"
+                  />
+                  
+                  <TokenSelector
+                    tokens={getTokensForChain(toChain)}
+                    selectedToken={toToken}
+                    onSelect={setToToken}
+                    chainName={SUPPORTED_CHAINS.find(c => c.id === toChain)?.name || ""}
+                    className="bg-[#0a192f] text-white"
+                  />
+                  
+                  <Input
+                    type="number"
+                    placeholder="0.0"
+                    value={toAmount}
+                    onChange={(e) => setToAmount(e.target.value)}
+                    className="flex-1 bg-[#0a192f] text-white border-[#1e2a47] focus-visible:ring-2 focus-visible:ring-blue-500"
+                    readOnly
+                  />
+                </motion.div>
               </div>
-            </div>
+            </motion.div>
 
             {/* Swap Details */}
             {fromAmount && (
@@ -233,23 +303,25 @@ export default function SwapInterface() {
             )}
 
             {/* Swap Button */}
-            <Button
-              className="w-full"
-              size="lg"
-              onClick={isConnected ? handleSwap : undefined}
-              disabled={!isConnected ? false : (!fromAmount || isLoading)}
+            <motion.div
+              variants={item}
+              className="mt-6"
             >
-              {!isConnected ? (
-                "Connect Wallet"
-              ) : isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                "Swap"
-              )}
-            </Button>
+              <Button
+                disabled={!isConnected || !fromAmount || parseFloat(fromAmount) <= 0}
+                onClick={handleSwap}
+                className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:opacity-90 text-white"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Swapping...
+                  </>
+                ) : (
+                  "Swap"
+                )}
+              </Button>
+            </motion.div>
 
             {/* Non-EVM Chains */}
             <div className="border-t pt-4">
@@ -265,7 +337,7 @@ export default function SwapInterface() {
               </div>
             </div>
           </CardContent>
-        </Card>
+        </motion.div>
       </div>
     </div>
   );

@@ -19,13 +19,15 @@ interface ChainSelectorProps {
   selectedChain: number;
   onSelect: (chainId: number) => void;
   label?: string;
+  className?: string;
 }
 
-export function ChainSelector({
+export default function ChainSelector({
   chains,
   selectedChain,
   onSelect,
   label = "Select Chain",
+  className,
 }: ChainSelectorProps) {
   const [open, setOpen] = useState(false);
   
@@ -34,7 +36,7 @@ export function ChainSelector({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="w-[180px] justify-between">
+        <Button variant="outline" className={`w-[180px] justify-between ${className || ''}`}>
           {currentChain ? (
             <>
               <div className="flex items-center gap-2">
@@ -51,7 +53,7 @@ export function ChainSelector({
           )}
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className={`sm:max-w-[425px] ${className || ''}`}>
         <DialogHeader>
           <DialogTitle>Select a network</DialogTitle>
           <DialogDescription>

@@ -36,10 +36,11 @@ export default function TokenSelector({
   const filteredTokens = tokens.filter(
     (token) =>
       token.symbol.toLowerCase().includes(search.toLowerCase()) ||
-      token.name.toLowerCase().includes(search.toLowerCase())
+      token.name.toLowerCase().includes(search.toLowerCase()) ||
+      token.address.toLowerCase().includes(search.toLowerCase())
   );
 
-  const currentToken = tokens.find((t) => t.symbol === selectedToken);
+  const currentToken = tokens.find((t) => t.symbol === selectedToken || t.address === selectedToken);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -68,31 +69,31 @@ export default function TokenSelector({
         <div className="space-y-4 mt-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <select
-              value={selectedToken}
-              onChange={(e) => onSelect(e.target.value)}
-              className={`flex-1 bg-[#1e2a47] text-gray-300 border-[#1e2a47] rounded-md px-3 py-2 focus-visible:ring-blue-500 ${className || ''}`}
-            >
-              {filteredTokens.map((token) => (
-                <option key={token.address} value={token.symbol} className="text-gray-300 bg-[#0a192f]">
-                  {token.symbol} - {token.name}
-                </option>
-              ))}
-            </select>
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name or symbol"
+              className="pl-10"
+            />
           </div>
           <div className="space-y-2 max-h-[300px] overflow-y-auto">
             {filteredTokens.map((token) => (
               <button
                 key={token.address}
                 onClick={() => {
-                  onSelect(token.symbol);
+                  onSelect(token.address);
                   setOpen(false);
+                  setSearch("");
                 }}
                 className="w-full flex items-center justify-between p-3 hover:bg-muted rounded-lg transition-colors"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center text-xs font-semibold">
-                    {token.symbol.slice(0, 2)}
+                  <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center overflow-hidden">
+                    {token.logoURI ? (
+                      <img src={token.logoURI} alt={token.symbol} className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-xs font-semibold">{token.symbol.slice(0, 2)}</span>
+                    )}
                   </div>
                   <div className="text-left">
                     <div className="font-medium">{token.symbol}</div>
@@ -101,7 +102,7 @@ export default function TokenSelector({
                     </div>
                   </div>
                 </div>
-                {selectedToken === token.symbol && (
+                {(selectedToken === token.symbol || selectedToken === token.address) && (
                   <Badge variant="secondary">Selected</Badge>
                 )}
               </button>

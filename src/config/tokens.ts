@@ -4,13 +4,14 @@ export interface Token {
   address: string;
   decimals: number;
   logoURI?: string;
-  chainId: number;
+  chainId: number | string; // Support both numeric (EVM) and string (non-EVM) chain IDs
 }
 
 export interface ChainConfig {
-  id: number;
+  id: number | string; // Support both numeric (EVM) and string (non-EVM) chain IDs
   name: string;
   network: string;
+  type?: 'EVM' | 'SOLANA' | 'APTOS' | 'SUI' | 'NEAR' | 'COSMOS' | 'TRON' | 'STELLAR';
   nativeCurrency: {
     name: string;
     symbol: string;
@@ -26,6 +27,7 @@ export const SUPPORTED_CHAINS: ChainConfig[] = [
     id: 1,
     name: "Ethereum",
     network: "ethereum",
+    type: "EVM",
     nativeCurrency: {
       name: "Ether",
       symbol: "ETH",
@@ -39,6 +41,7 @@ export const SUPPORTED_CHAINS: ChainConfig[] = [
     id: 11155111,
     name: "Sepolia",
     network: "sepolia",
+    type: "EVM",
     nativeCurrency: {
       name: "SepoliaETH",
       symbol: "SEP",
@@ -52,6 +55,7 @@ export const SUPPORTED_CHAINS: ChainConfig[] = [
     id: 56,
     name: "BNB Smart Chain",
     network: "bsc",
+    type: "EVM",
     nativeCurrency: {
       name: "BNB",
       symbol: "BNB",
@@ -65,6 +69,7 @@ export const SUPPORTED_CHAINS: ChainConfig[] = [
     id: 137,
     name: "Polygon",
     network: "polygon",
+    type: "EVM",
     nativeCurrency: {
       name: "MATIC",
       symbol: "MATIC",
@@ -78,6 +83,7 @@ export const SUPPORTED_CHAINS: ChainConfig[] = [
     id: 42161,
     name: "Arbitrum",
     network: "arbitrum",
+    type: "EVM",
     nativeCurrency: {
       name: "Ether",
       symbol: "ETH",
@@ -91,6 +97,7 @@ export const SUPPORTED_CHAINS: ChainConfig[] = [
     id: 10,
     name: "Optimism",
     network: "optimism",
+    type: "EVM",
     nativeCurrency: {
       name: "Ether",
       symbol: "ETH",
@@ -104,6 +111,7 @@ export const SUPPORTED_CHAINS: ChainConfig[] = [
     id: 43114,
     name: "Avalanche",
     network: "avalanche",
+    type: "EVM",
     nativeCurrency: {
       name: "AVAX",
       symbol: "AVAX",
@@ -113,10 +121,109 @@ export const SUPPORTED_CHAINS: ChainConfig[] = [
     blockExplorerUrls: ["https://snowtrace.io"],
     logoURI: "https://cryptologos.cc/logos/avalanche-avax-logo.png",
   },
+  // Non-EVM Chains
+  {
+    id: "solana",
+    name: "Solana",
+    network: "solana",
+    type: "SOLANA",
+    nativeCurrency: {
+      name: "SOL",
+      symbol: "SOL",
+      decimals: 9,
+    },
+    rpcUrls: ["https://api.mainnet-beta.solana.com"],
+    blockExplorerUrls: ["https://explorer.solana.com"],
+    logoURI: "https://cryptologos.cc/logos/solana-sol-logo.png",
+  },
+  {
+    id: "aptos",
+    name: "Aptos",
+    network: "aptos",
+    type: "APTOS",
+    nativeCurrency: {
+      name: "APT",
+      symbol: "APT",
+      decimals: 8,
+    },
+    rpcUrls: ["https://fullnode.mainnet.aptoslabs.com"],
+    blockExplorerUrls: ["https://explorer.aptoslabs.com"],
+    logoURI: "https://cryptologos.cc/logos/aptos-apt-logo.png",
+  },
+  {
+    id: "sui",
+    name: "Sui",
+    network: "sui",
+    type: "SUI",
+    nativeCurrency: {
+      name: "SUI",
+      symbol: "SUI",
+      decimals: 9,
+    },
+    rpcUrls: ["https://fullnode.mainnet.sui.io"],
+    blockExplorerUrls: ["https://suiexplorer.com"],
+    logoURI: "https://cryptologos.cc/logos/sui-sui-logo.png",
+  },
+  {
+    id: "near",
+    name: "NEAR",
+    network: "near",
+    type: "NEAR",
+    nativeCurrency: {
+      name: "NEAR",
+      symbol: "NEAR",
+      decimals: 24,
+    },
+    rpcUrls: ["https://rpc.mainnet.near.org"],
+    blockExplorerUrls: ["https://nearblocks.io"],
+    logoURI: "https://cryptologos.cc/logos/near-protocol-near-logo.png",
+  },
+  {
+    id: "cosmos",
+    name: "Cosmos",
+    network: "cosmos",
+    type: "COSMOS",
+    nativeCurrency: {
+      name: "ATOM",
+      symbol: "ATOM",
+      decimals: 6,
+    },
+    rpcUrls: ["https://rpc.cosmos.network"],
+    blockExplorerUrls: ["https://www.mintscan.io/cosmos"],
+    logoURI: "https://cryptologos.cc/logos/cosmos-atom-logo.png",
+  },
+  {
+    id: "tron",
+    name: "TRON",
+    network: "tron",
+    type: "TRON",
+    nativeCurrency: {
+      name: "TRX",
+      symbol: "TRX",
+      decimals: 6,
+    },
+    rpcUrls: ["https://api.trongrid.io"],
+    blockExplorerUrls: ["https://tronscan.io"],
+    logoURI: "https://cryptologos.cc/logos/tron-trx-logo.png",
+  },
+  {
+    id: "stellar",
+    name: "Stellar",
+    network: "stellar",
+    type: "STELLAR",
+    nativeCurrency: {
+      name: "XLM",
+      symbol: "XLM",
+      decimals: 7,
+    },
+    rpcUrls: ["https://horizon.stellar.org"],
+    blockExplorerUrls: ["https://stellar.expert"],
+    logoURI: "https://cryptologos.cc/logos/stellar-xlm-logo.png",
+  },
 ];
 
 // Default token lists for each chain
-export const DEFAULT_TOKENS: Record<number, Token[]> = {
+export const DEFAULT_TOKENS: Record<number | string, Token[]> = {
   1: [
     {
       symbol: "USDC",
@@ -297,6 +404,141 @@ export const DEFAULT_TOKENS: Record<number, Token[]> = {
       decimals: 18,
       logoURI: "https://cryptologos.cc/logos/avalanche-avax-logo.png",
       chainId: 43114,
+    },
+  ],
+  // Non-EVM chain tokens
+  solana: [
+    {
+      symbol: "USDC",
+      name: "USD Coin",
+      address: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      decimals: 6,
+      logoURI: "https://cryptologos.cc/logos/usd-coin-usdc-logo.png",
+      chainId: "solana",
+    },
+    {
+      symbol: "USDT",
+      name: "Tether USD",
+      address: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+      decimals: 6,
+      logoURI: "https://cryptologos.cc/logos/tether-usdt-logo.png",
+      chainId: "solana",
+    },
+    {
+      symbol: "WSOL",
+      name: "Wrapped SOL",
+      address: "So11111111111111111111111111111111111111112",
+      decimals: 9,
+      logoURI: "https://cryptologos.cc/logos/solana-sol-logo.png",
+      chainId: "solana",
+    },
+  ],
+  aptos: [
+    {
+      symbol: "USDC",
+      name: "USD Coin",
+      address: "0x5e156f1207d0ebfa19a9eeff00d62a282278fb8719f4fab3a586a0a2c0fffbea::coin::T",
+      decimals: 6,
+      logoURI: "https://cryptologos.cc/logos/usd-coin-usdc-logo.png",
+      chainId: "aptos",
+    },
+    {
+      symbol: "APT",
+      name: "Aptos Coin",
+      address: "0x1::aptos_coin::AptosCoin",
+      decimals: 8,
+      logoURI: "https://cryptologos.cc/logos/aptos-apt-logo.png",
+      chainId: "aptos",
+    },
+  ],
+  sui: [
+    {
+      symbol: "USDC",
+      name: "USD Coin",
+      address: "0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN",
+      decimals: 6,
+      logoURI: "https://cryptologos.cc/logos/usd-coin-usdc-logo.png",
+      chainId: "sui",
+    },
+    {
+      symbol: "SUI",
+      name: "Sui",
+      address: "0x2::sui::SUI",
+      decimals: 9,
+      logoURI: "https://cryptologos.cc/logos/sui-sui-logo.png",
+      chainId: "sui",
+    },
+  ],
+  near: [
+    {
+      symbol: "USDC",
+      name: "USD Coin",
+      address: "a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48.factory.bridge.near",
+      decimals: 6,
+      logoURI: "https://cryptologos.cc/logos/usd-coin-usdc-logo.png",
+      chainId: "near",
+    },
+    {
+      symbol: "NEAR",
+      name: "NEAR",
+      address: "wrap.near",
+      decimals: 24,
+      logoURI: "https://cryptologos.cc/logos/near-protocol-near-logo.png",
+      chainId: "near",
+    },
+  ],
+  cosmos: [
+    {
+      symbol: "ATOM",
+      name: "Cosmos",
+      address: "uatom",
+      decimals: 6,
+      logoURI: "https://cryptologos.cc/logos/cosmos-atom-logo.png",
+      chainId: "cosmos",
+    },
+    {
+      symbol: "USDC",
+      name: "USD Coin",
+      address: "ibc/B3504E092456BA618CC28AC671A71FB08C6CA0FD0BE7C8A5B5A3E2DD933CC9E4",
+      decimals: 6,
+      logoURI: "https://cryptologos.cc/logos/usd-coin-usdc-logo.png",
+      chainId: "cosmos",
+    },
+  ],
+  tron: [
+    {
+      symbol: "USDT",
+      name: "Tether USD",
+      address: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
+      decimals: 6,
+      logoURI: "https://cryptologos.cc/logos/tether-usdt-logo.png",
+      chainId: "tron",
+    },
+    {
+      symbol: "TRX",
+      name: "TRON",
+      address: "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
+      decimals: 6,
+      logoURI: "https://cryptologos.cc/logos/tron-trx-logo.png",
+      chainId: "tron",
+    },
+  ],
+  stellar: [
+    {
+      symbol: "USDC",
+      name: "USD Coin",
+      address: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+      decimals: 7,
+      logoURI: "https://cryptologos.cc/logos/usd-coin-usdc-logo.png",
+      chainId: "stellar",
+    },
+    {
+      symbol: "XLM",
+      name: "Stellar Lumens",
+      address: "native",
+      decimals: 7,
+      logoURI: "https://cryptologos.cc/logos/stellar-xlm-logo.png",
+      chainId: "stellar",
     },
   ],
 };

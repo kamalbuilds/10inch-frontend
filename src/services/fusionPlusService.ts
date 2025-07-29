@@ -2,12 +2,13 @@ import { ethers } from "ethers";
 import axios from "axios";
 import { Connection, PublicKey, Keypair, Transaction } from "@solana/web3.js";
 import { AptosClient, AptosAccount, HexString } from "aptos";
-import { JsonRpcProvider  } from "@mysten/sui.js";
+import { JsonRpcProvider  } from "ethers";
 import { connect as nearConnect, keyStores, utils as nearUtils } from "near-api-js";
 import { SigningStargateClient } from "@cosmjs/stargate";
 import { DirectSecp256k1HdWallet } from "@cosmjs/proto-signing";
 import { TronWeb } from "tronweb";
 import StellarSdk from "stellar-sdk";
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 
 export interface SwapParams {
   fromChain: string; // Changed from number to string to support non-numeric chain IDs
@@ -372,8 +373,7 @@ class FusionPlusService {
     if (!params.privateKey) throw new Error("Private key required for Sui");
     
     // Import Sui transaction builder
-    const { TransactionBlock } = await import("@mysten/sui.js");
-    
+
     const tx = new TransactionBlock();
     tx.moveCall({
       target: `${packageId}::fusion_htlc::create_htlc`,

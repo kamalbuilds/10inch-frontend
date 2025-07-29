@@ -23,14 +23,28 @@ import {
 
 export default function SwapInterface() {
   const { isConnected, address, chainId, signer } = useWallet();
-  const [fromChain, setFromChain] = useState<number>(1);
-  const [toChain, setToChain] = useState<number>(137);
-  const [fromToken, setFromToken] = useState<string>("USDC");
-  const [toToken, setToToken] = useState<string>("USDC");
+  
+  // Helper function to get token symbol from address
+  const getTokenSymbol = (tokenAddress: string, chainId: string | number): string => {
+    const tokens = getTokensForChain(chainId);
+    const token = tokens.find(t => t.address === tokenAddress || t.symbol === tokenAddress);
+    return token?.symbol || tokenAddress;
+  };
+  const [fromChain, setFromChain] = useState<string | number>(1); // Ethereum
+  const [toChain, setToChain] = useState<string | number>(137); // Polygon
+  const [fromToken, setFromToken] = useState<string>("ETH");
+  const [toToken, setToToken] = useState<string>("MATIC");
   const [fromAmount, setFromAmount] = useState<string>("");
   const [toAmount, setToAmount] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [swapMode, setSwapMode] = useState<"simple" | "fusion">("fusion");
+  const [recipientAddress, setRecipientAddress] = useState<string>("");
+  const [estimatedGas, setEstimatedGas] = useState<string>("");
+  const [estimatedTime, setEstimatedTime] = useState<number>(0);
+  const [swapRate, setSwapRate] = useState<string>("");
+  const [nonEvmPrivateKey, setNonEvmPrivateKey] = useState<string>("");
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [swapError, setSwapError] = useState<string>("");
 
   // Add animation variants
   const container = {
@@ -52,52 +66,90 @@ export default function SwapInterface() {
   useEffect(() => {
     if (fromAmount && parseFloat(fromAmount) > 0) {
       const updateQuote = async () => {
+        setQuoteLoading(true);
+        setSwapError("");
         try {
+          const fromChainConfig = SUPPORTED_CHAINS.find(c => c.id === fromChain);
+          const toChainConfig = SUPPORTED_CHAINS.find(c => c.id === toChain);
+          
+          if (!fromChainConfig || !toChainConfig) {
+            throw new Error("Invalid chain selection");
+          }
+
           const quote = await fusionPlusService.getSwapQuote({
-            fromChain,
-            toChain,
+            fromChain: fromChainConfig.name.toUpperCase().replace(" ", "_"),
+            toChain: toChainConfig.name.toUpperCase().replace(" ", "_"),
             fromToken,
             toToken,
             amount: fromAmount,
           });
           setToAmount(quote.toAmount);
+          setEstimatedGas(quote.estimatedGas);
+          setEstimatedTime(quote.estimatedTime);
+          setSwapRate(quote.rate);
         } catch (error) {
           console.error("Error updating quote:", error);
+          setSwapError("Failed to get quote. Please try again.");
+        } finally {
+          setQuoteLoading(false);
         }
       };
-      updateQuote();
+      
+      const debounceTimer = setTimeout(updateQuote, 500);
+      return () => clearTimeout(debounceTimer);
     } else {
       setToAmount("");
+      setEstimatedGas("");
+      setEstimatedTime(0);
+      setSwapRate("");
     }
   }, [fromAmount, fromChain, toChain, fromToken, toToken]);
 
   const handleSwap = async () => {
     if (!isConnected || !signer) {
-      alert("Please connect your wallet first");
+      setSwapError("Please connect your wallet first");
+      return;
+    }
+
+    const fromChainConfig = SUPPORTED_CHAINS.find(c => c.id === fromChain);
+    const toChainConfig = SUPPORTED_CHAINS.find(c => c.id === toChain);
+    
+    if (!fromChainConfig || !toChainConfig) {
+      setSwapError("Invalid chain selection");
+      return;
+    }
+
+    // Check if non-EVM chain requires private key
+    if (fromChainConfig.type !== 'EVM' && !nonEvmPrivateKey) {
+      setSwapError(`Private key required for ${fromChainConfig.name} transactions`);
       return;
     }
 
     setIsLoading(true);
+    setSwapError("");
     try {
-      const txHash = await fusionPlusService.executeSwap(
+      const swapId = await fusionPlusService.executeSwap(
         {
-          fromChain,
-          toChain,
+          fromChain: fromChainConfig.name.toUpperCase().replace(" ", "_"),
+          toChain: toChainConfig.name.toUpperCase().replace(" ", "_"),
           fromToken,
           toToken,
           amount: fromAmount,
-          recipient: address!,
+          recipient: recipientAddress || address!,
+          senderAddress: address!,
+          privateKey: fromChainConfig.type !== 'EVM' ? nonEvmPrivateKey : undefined,
         },
-        signer
+        fromChainConfig.type === 'EVM' ? signer : undefined
       );
       
-      alert(`Swap initiated! Transaction: ${txHash}`);
+      alert(`Swap initiated! ID: ${swapId}`);
       // Reset form
       setFromAmount("");
       setToAmount("");
-    } catch (error) {
+      setNonEvmPrivateKey("");
+    } catch (error: any) {
       console.error("Swap failed:", error);
-      alert("Swap failed. Please try again.");
+      setSwapError(error.message || "Swap failed. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -112,8 +164,10 @@ export default function SwapInterface() {
     setToAmount(fromAmount);
   };
 
-  const getTokensForChain = (chainId: number): Token[] => {
-    return DEFAULT_TOKENS[chainId] || [];
+  const getTokensForChain = (chainId: string | number): Token[] => {
+    // For string chain IDs (non-EVM), convert to lowercase
+    const lookupId = typeof chainId === 'string' ? chainId.toLowerCase() : chainId;
+    return DEFAULT_TOKENS[lookupId] || [];
   };
 
   return (
@@ -214,7 +268,18 @@ export default function SwapInterface() {
                   <ChainSelector
                     chains={SUPPORTED_CHAINS}
                     selectedChain={fromChain}
-                    onSelect={setFromChain}
+                    onSelect={(chainId) => {
+                      setFromChain(chainId);
+                      // Reset token selection when chain changes
+                      const newTokens = getTokensForChain(chainId);
+                      if (newTokens.length > 0) {
+                        // Select native token by default
+                        const chain = SUPPORTED_CHAINS.find(c => c.id === chainId);
+                        if (chain) {
+                          setFromToken(chain.nativeCurrency.symbol);
+                        }
+                      }
+                    }}
                     className="bg-[#0a192f] text-white"
                   />
                   
@@ -260,7 +325,18 @@ export default function SwapInterface() {
                   <ChainSelector
                     chains={SUPPORTED_CHAINS}
                     selectedChain={toChain}
-                    onSelect={setToChain}
+                    onSelect={(chainId) => {
+                      setToChain(chainId);
+                      // Reset token selection when chain changes
+                      const newTokens = getTokensForChain(chainId);
+                      if (newTokens.length > 0) {
+                        // Select native token by default
+                        const chain = SUPPORTED_CHAINS.find(c => c.id === chainId);
+                        if (chain) {
+                          setToToken(chain.nativeCurrency.symbol);
+                        }
+                      }
+                    }}
                     className="bg-[#0a192f] text-white"
                   />
                   
@@ -275,31 +351,78 @@ export default function SwapInterface() {
                   <Input
                     type="number"
                     placeholder="0.0"
-                    value={toAmount}
-                    onChange={(e) => setToAmount(e.target.value)}
+                    value={quoteLoading ? "Loading..." : toAmount}
                     className="flex-1 bg-[#0a192f] text-white border-[#1e2a47] focus-visible:ring-2 focus-visible:ring-blue-500"
                     readOnly
+                    disabled
                   />
                 </motion.div>
               </div>
             </motion.div>
 
             {/* Swap Details */}
-            {fromAmount && (
-              <div className="bg-muted rounded-lg p-4 space-y-2">
+            {fromAmount && parseFloat(fromAmount) > 0 && !quoteLoading && (
+              <motion.div
+                variants={item}
+                className="bg-[#1e2a47]/50 backdrop-blur rounded-lg p-4 space-y-2 border border-[#2a3f5f]"
+              >
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Rate</span>
-                  <span>1 {fromToken} = 1 {toToken}</span>
+                  <span className="text-gray-400">Rate</span>
+                  <span className="text-gray-300">
+                    1 {getTokenSymbol(fromToken, fromChain)} = {swapRate || "1"} {getTokenSymbol(toToken, toChain)}
+                  </span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Network Fee</span>
-                  <span>~$2.50</span>
+                  <span className="text-gray-400">Network Fee</span>
+                  <span className="text-gray-300">~{estimatedGas || "0.001"} ETH</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Est. Time</span>
-                  <span>~2-5 minutes</span>
+                  <span className="text-gray-400">Est. Time</span>
+                  <span className="text-gray-300">~{Math.ceil((estimatedTime || 300) / 60)} minutes</span>
                 </div>
-              </div>
+              </motion.div>
+            )}
+
+            {/* Error Message */}
+            {swapError && (
+              <motion.div
+                variants={item}
+                className="bg-red-500/10 border border-red-500/20 rounded-lg p-3"
+              >
+                <p className="text-red-400 text-sm">{swapError}</p>
+              </motion.div>
+            )}
+
+            {/* Non-EVM Private Key Input */}
+            {(() => {
+              const fromChainConfig = SUPPORTED_CHAINS.find(c => c.id === fromChain);
+              return fromChainConfig?.type !== 'EVM' ? (
+                <motion.div variants={item} className="space-y-2">
+                  <Label className="text-gray-400">Private Key (Required for {fromChainConfig.name})</Label>
+                  <Input
+                    type="password"
+                    placeholder="Enter your private key"
+                    value={nonEvmPrivateKey}
+                    onChange={(e) => setNonEvmPrivateKey(e.target.value)}
+                    className="bg-[#0a192f] text-white border-[#1e2a47] focus-visible:ring-2 focus-visible:ring-blue-500"
+                  />
+                  <p className="text-xs text-gray-500">Your private key is never stored and only used for this transaction</p>
+                </motion.div>
+              ) : null;
+            })()}
+
+            {/* Recipient Address (Optional) */}
+            {swapMode === "fusion" && (
+              <motion.div variants={item} className="space-y-2">
+                <Label className="text-gray-400">Recipient Address (Optional)</Label>
+                <Input
+                  placeholder={`Enter ${SUPPORTED_CHAINS.find(c => c.id === toChain)?.name || ''} address`}
+                  value={recipientAddress}
+                  onChange={(e) => setRecipientAddress(e.target.value)}
+                  className="bg-[#0a192f] text-white border-[#1e2a47] focus-visible:ring-2 focus-visible:ring-blue-500"
+                />
+                <p className="text-xs text-gray-500">Leave empty to send to your connected wallet</p>
+              </motion.div>
             )}
 
             {/* Swap Button */}
@@ -308,9 +431,9 @@ export default function SwapInterface() {
               className="mt-6"
             >
               <Button
-                disabled={!isConnected || !fromAmount || parseFloat(fromAmount) <= 0}
+                disabled={!isConnected || !fromAmount || parseFloat(fromAmount) <= 0 || isLoading || quoteLoading}
                 onClick={handleSwap}
-                className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:opacity-90 text-white"
+                className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:opacity-90 text-white disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? (
                   <>
@@ -323,19 +446,31 @@ export default function SwapInterface() {
               </Button>
             </motion.div>
 
-            {/* Non-EVM Chains */}
-            <div className="border-t pt-4">
-              <p className="text-sm text-muted-foreground mb-3">
-                Also supporting non-EVM chains:
+            {/* Non-EVM Chains Info */}
+            <motion.div
+              variants={item}
+              className="border-t border-[#2a3f5f] pt-4"
+            >
+              <p className="text-sm text-gray-400 mb-3">
+                Supported non-EVM chains:
               </p>
               <div className="flex gap-2 flex-wrap">
-                {Object.values(NON_EVM_CHAINS).map((chain) => (
-                  <Badge key={chain.id} variant="outline">
+                {SUPPORTED_CHAINS.filter(chain => chain.type && chain.type !== 'EVM').map((chain) => (
+                  <Badge 
+                    key={chain.id} 
+                    variant="outline"
+                    className="border-[#2a3f5f] text-gray-300 hover:bg-[#1e2a47] transition-colors"
+                  >
+                    <img 
+                      src={chain.logoURI} 
+                      alt={chain.name} 
+                      className="w-4 h-4 mr-1 rounded-full"
+                    />
                     {chain.name}
                   </Badge>
                 ))}
               </div>
-            </div>
+            </motion.div>
           </CardContent>
         </motion.div>
       </div>

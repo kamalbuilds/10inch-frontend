@@ -21,6 +21,7 @@ interface TokenSelectorProps {
   onSelect: (token: string) => void;
   chainName: string;
   className?: string;
+  loading?: boolean;
 }
 
 export default function TokenSelector({
@@ -29,6 +30,7 @@ export default function TokenSelector({
   onSelect,
   chainName,
   className,
+  loading,
 }: TokenSelectorProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -77,7 +79,16 @@ export default function TokenSelector({
             />
           </div>
           <div className="space-y-2 max-h-[300px] overflow-y-auto">
-            {filteredTokens.map((token) => (
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              </div>
+            ) : filteredTokens.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                No tokens found
+              </div>
+            ) : (
+              filteredTokens.map((token) => (
               <button
                 key={token.address}
                 onClick={() => {
@@ -106,7 +117,8 @@ export default function TokenSelector({
                   <Badge variant="secondary">Selected</Badge>
                 )}
               </button>
-            ))}
+            ))
+            )}
           </div>
         </div>
       </DialogContent>

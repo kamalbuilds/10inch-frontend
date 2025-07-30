@@ -9,6 +9,8 @@ import { DirectSecp256k1HdWallet } from "@cosmjs/proto-signing";
 import { TronWeb } from "tronweb";
 import StellarSdk from "stellar-sdk";
 import { TransactionBlock } from '@mysten/sui.js/transactions';
+import OneInchService, { oneInchServices, ONE_INCH_CHAINS } from './oneInchService';
+import { Token, DEFAULT_TOKENS } from '@/config/tokens';
 
 export interface SwapParams {
   fromChain: string; // Changed from number to string to support non-numeric chain IDs
@@ -134,7 +136,6 @@ class FusionPlusService {
     this.swapContracts.set("AVALANCHE", process.env.NEXT_PUBLIC_AVALANCHE_HTLC_ADDRESS || "");
     
     // Non-EVM contract addresses
-    this.swapContracts.set("SOLANA", process.env.NEXT_PUBLIC_SOLANA_PROGRAM_ID || "");
     this.swapContracts.set("APTOS", process.env.NEXT_PUBLIC_APTOS_MODULE_ADDRESS || "0x1::fusion_htlc");
     this.swapContracts.set("SUI", process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || "");
     this.swapContracts.set("NEAR", process.env.NEXT_PUBLIC_NEAR_CONTRACT_ID || "fusion-plus.near");
@@ -145,29 +146,90 @@ class FusionPlusService {
 
   async getSwapQuote(params: SwapParams): Promise<SwapQuote> {
     try {
-      // Call the 1inch Fusion API for quote
-      const response = await axios.post(`${this.apiUrl}/api/v1/quote`, {
-        fromChain: params.fromChain,
-        toChain: params.toChain,
-        fromToken: params.fromToken,
-        toToken: params.toToken,
-        amount: params.amount,
-        slippage: params.slippage || 100, // 1% default
-      });
+      const fromChainConfig = this.getChainConfig(params.fromChain);
+      const toChainConfig = this.getChainConfig(params.toChain);
 
-      const { data } = response;
+      // For same-chain swaps using 1inch API
+      if (fromChainConfig.id === toChainConfig.id && fromChainConfig.type === "EVM") {
+        const chainId = fromChainConfig.id as number;
+        const oneInchService = oneInchServices[chainId];
+        
+        if (oneInchService) {
+          // Get token addresses
+          let srcToken = params.fromToken;
+          let dstToken = params.toToken;
+          
+          // Convert native token symbols to 1inch native address
+          if (params.fromToken === 'ETH' || params.fromToken === 'BNB' || params.fromToken === 'MATIC' || params.fromToken === 'AVAX') {
+            srcToken = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+          }
+          if (params.toToken === 'ETH' || params.toToken === 'BNB' || params.toToken === 'MATIC' || params.toToken === 'AVAX') {
+            dstToken = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+          }
+          
+          // If still symbols, try to find token addresses
+          if (!srcToken.startsWith('0x')) {
+            const token = await oneInchService.getTokenBySymbol(srcToken);
+            if (token) srcToken = token.address;
+          }
+          if (!dstToken.startsWith('0x')) {
+            const token = await oneInchService.getTokenBySymbol(dstToken);
+            if (token) dstToken = token.address;
+          }
+          
+          const quote = await oneInchService.getQuote({
+            src: srcToken,
+            dst: dstToken,
+            amount: ethers.parseUnits(params.amount, 18).toString(), // Assuming 18 decimals, adjust as needed
+            includeTokensInfo: true,
+            includeGas: true,
+          });
+          
+          const toAmount = ethers.formatUnits(quote.dstAmount, quote.dstToken?.decimals || 18);
+          const estimatedGas = quote.gas ? ethers.formatEther(BigInt(quote.gas) * BigInt(quote.gasPrice || '0')) : '0.001';
+          
+          return {
+            fromAmount: params.amount,
+            toAmount,
+            rate: (parseFloat(toAmount) / parseFloat(params.amount)).toFixed(6),
+            estimatedGas,
+            estimatedTime: 60, // 1 minute for same-chain swaps
+            route: quote.protocols?.[0]?.map((p: any) => p.name) || [params.fromChain, "1inch", params.toChain],
+          };
+        }
+      }
 
-      // Calculate estimated time based on chain types
+      // For cross-chain swaps, use existing logic or implement cross-chain quote
       const estimatedTime = this.calculateEstimatedTime(params.fromChain, params.toChain);
-
-      // Get gas estimates for both chains
       const fromGas = await this.estimateGasForChain(params.fromChain, "create");
       const toGas = await this.estimateGasForChain(params.toChain, "claim");
 
+      // Simple rate calculation for cross-chain (would need proper oracle in production)
+      let rate = "1";
+      let toAmount = params.amount;
+      
+      // Add some basic rate conversions for demo
+      if (params.fromChain !== params.toChain) {
+        // This is simplified - in production, use price oracles
+        const rates: Record<string, Record<string, number>> = {
+          'ETHEREUM': { 'POLYGON': 1, 'BSC': 1, 'ARBITRUM': 1 },
+          'POLYGON': { 'ETHEREUM': 1, 'BSC': 1, 'ARBITRUM': 1 },
+          'BSC': { 'ETHEREUM': 1, 'POLYGON': 1, 'ARBITRUM': 1 },
+        };
+        
+        const fromChainKey = params.fromChain.toUpperCase();
+        const toChainKey = params.toChain.toUpperCase();
+        
+        if (rates[fromChainKey]?.[toChainKey]) {
+          rate = rates[fromChainKey][toChainKey].toString();
+          toAmount = (parseFloat(params.amount) * rates[fromChainKey][toChainKey]).toString();
+        }
+      }
+
       return {
         fromAmount: params.amount,
-        toAmount: data.toAmount || params.amount,
-        rate: data.rate || "1",
+        toAmount,
+        rate,
         estimatedGas: (parseFloat(fromGas) + parseFloat(toGas)).toString(),
         estimatedTime,
         route: this.buildRoute(params.fromChain, params.toChain),
@@ -192,6 +254,88 @@ class FusionPlusService {
       const fromChainConfig = this.getChainConfig(params.fromChain);
       const toChainConfig = this.getChainConfig(params.toChain);
 
+      // For same-chain swaps on EVM, use 1inch API
+      if (fromChainConfig.id === toChainConfig.id && fromChainConfig.type === "EVM" && signer) {
+        const chainId = fromChainConfig.id as number;
+        const oneInchService = oneInchServices[chainId];
+        
+        if (oneInchService) {
+          // Get token addresses
+          let srcToken = params.fromToken;
+          let dstToken = params.toToken;
+          
+          // Convert native token symbols to 1inch native address
+          if (params.fromToken === 'ETH' || params.fromToken === 'BNB' || params.fromToken === 'MATIC' || params.fromToken === 'AVAX') {
+            srcToken = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+          }
+          if (params.toToken === 'ETH' || params.toToken === 'BNB' || params.toToken === 'MATIC' || params.toToken === 'AVAX') {
+            dstToken = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+          }
+          
+          // If still symbols, try to find token addresses
+          if (!srcToken.startsWith('0x')) {
+            const token = await oneInchService.getTokenBySymbol(srcToken);
+            if (token) srcToken = token.address;
+          }
+          if (!dstToken.startsWith('0x')) {
+            const token = await oneInchService.getTokenBySymbol(dstToken);
+            if (token) dstToken = token.address;
+          }
+
+          // Check if we need approval for ERC20 tokens
+          if (srcToken !== '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee') {
+            const spenderData = await oneInchService.getApproveSpender();
+            const tokenContract = new ethers.Contract(
+              srcToken,
+              ["function allowance(address,address) view returns (uint256)"],
+              signer
+            );
+            
+            const allowance = await tokenContract.allowance(
+              params.senderAddress,
+              spenderData.address
+            );
+            
+            const amountInWei = ethers.parseUnits(params.amount, 18); // Adjust decimals as needed
+            
+            if (allowance < amountInWei) {
+              // Need approval
+              const approveData = await oneInchService.getApproveCalldata(srcToken);
+              const approveTx = await signer.sendTransaction({
+                to: approveData.to,
+                data: approveData.data,
+                value: approveData.value,
+              });
+              await approveTx.wait();
+            }
+          }
+          
+          // Build swap transaction
+          const swapData = await oneInchService.buildSwapTransaction({
+            src: srcToken,
+            dst: dstToken,
+            amount: ethers.parseUnits(params.amount, 18).toString(), // Adjust decimals
+            from: params.senderAddress!,
+            slippage: params.slippage || 1,
+            disableEstimate: false,
+            allowPartialFill: false,
+            receiver: params.recipient,
+          });
+          
+          // Execute swap
+          const tx = await signer.sendTransaction({
+            to: swapData.tx.to,
+            data: swapData.tx.data,
+            value: swapData.tx.value,
+            gasLimit: swapData.tx.gas,
+          });
+          
+          const receipt = await tx.wait();
+          return receipt!.hash;
+        }
+      }
+
+      // For cross-chain swaps, use HTLC logic
       // Generate secret and hashlock
       const secret = ethers.hexlify(ethers.randomBytes(32));
       const hashlock = ethers.sha256(secret);
@@ -204,8 +348,10 @@ class FusionPlusService {
 
       // Execute based on source chain type
       if (fromChainConfig.type === "EVM") {
+        console.log("Executing EVM HTLC from chain", params.fromChain);
         fromChainTx = await this.executeEvmHTLC(params, signer!, hashlock, timelock);
       } else {
+        console.log("Executing non-EVM HTLC from chain", params.fromChain);
         // Handle non-EVM chains
         switch (params.fromChain) {
           case "SOLANA":
@@ -297,6 +443,7 @@ class FusionPlusService {
 
     const htlcContract = new ethers.Contract(htlcAddress, htlcAbi, signer);
 
+    console.log(htlcAddress,"htlcAddress",htlcContract);
     if (params.fromToken === ethers.ZeroAddress) {
       // Native token (ETH, BNB, MATIC, etc.)
       const tx = await htlcContract.createHTLC(
@@ -408,7 +555,10 @@ class FusionPlusService {
     }
     
     // Set up NEAR account
-    const keyPair = nearUtils.KeyPair.fromString(params.privateKey);
+    // Parse the private key based on format (ed25519:base58_key)
+    const keyPair = params.privateKey.includes(':') 
+      ? nearUtils.KeyPair.fromString(params.privateKey as any)
+      : nearUtils.KeyPair.fromString(`ed25519:${params.privateKey}` as any);
     await near.connection.signer.keyStore.setKey("mainnet", params.senderAddress, keyPair);
     const account = await near.account(params.senderAddress);
     
@@ -507,9 +657,10 @@ class FusionPlusService {
   private async executeCosmosHTLC(params: SwapParams, hashlock: string, timelock: number): Promise<string> {
     if (!params.privateKey) throw new Error("Private key required for Cosmos");
     
-    const wallet = await DirectSecp256k1HdWallet.fromKey(
-      Buffer.from(params.privateKey.replace('0x', ''), 'hex'),
-      "cosmos"
+    // Create wallet from mnemonic or private key
+    const wallet = await DirectSecp256k1HdWallet.fromMnemonic(
+      params.privateKey, // Assuming private key is actually a mnemonic phrase
+      { prefix: "cosmos" }
     );
     
     const [account] = await wallet.getAccounts();
@@ -641,11 +792,44 @@ class FusionPlusService {
       const chainConfig = this.getChainConfig(chain);
 
       if (chainConfig.type === "EVM") {
+        const chainId = chainConfig.id as number;
+        const oneInchService = oneInchServices[chainId];
+        
+        // Try 1inch API first for supported chains
+        if (oneInchService) {
+          try {
+            // Handle native token
+            let actualTokenAddress = tokenAddress;
+            if (tokenAddress === ethers.ZeroAddress || tokenAddress === 'ETH' || tokenAddress === 'BNB' || tokenAddress === 'MATIC') {
+              actualTokenAddress = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+            }
+            
+            const balances = await oneInchService.getBalances({
+              walletAddress: userAddress,
+              contractAddresses: [actualTokenAddress]
+            });
+            
+            const balance = balances[actualTokenAddress.toLowerCase()];
+            if (balance) {
+              // Get token info for decimals
+              if (actualTokenAddress === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee') {
+                return ethers.formatEther(balance);
+              } else {
+                const tokenInfo = await oneInchService.getTokenByAddress(actualTokenAddress);
+                return ethers.formatUnits(balance, tokenInfo?.decimals || 18);
+              }
+            }
+          } catch (error) {
+            console.error("1inch API error, falling back to direct RPC:", error);
+          }
+        }
+        
+        // Fallback to direct RPC call
         const provider = this.evmProviders.get(chainConfig.id as number);
         if (!provider) throw new Error("Provider not found");
 
         // For native tokens
-        if (tokenAddress === ethers.ZeroAddress) {
+        if (tokenAddress === ethers.ZeroAddress || tokenAddress === 'ETH' || tokenAddress === 'BNB' || tokenAddress === 'MATIC') {
           const balance = await provider.getBalance(userAddress);
           return ethers.formatEther(balance);
         }
@@ -692,7 +876,7 @@ class FusionPlusService {
             owner: userAddress,
             coinType: "0x2::sui::SUI"
           });
-          const total = coins.data.reduce((sum, coin) => sum + BigInt(coin.balance), BigInt(0));
+          const total = coins.data.reduce((sum: bigint, coin: any) => sum + BigInt(coin.balance), BigInt(0));
           return (Number(total) / 1e9).toString();
         }
 
@@ -789,6 +973,119 @@ class FusionPlusService {
       default:
         return false;
     }
+  }
+
+  // Get tokens from 1inch API
+  async getTokensForChain(chainId: number | string): Promise<Token[]> {
+    try {
+      if (typeof chainId === 'number') {
+        const oneInchService = oneInchServices[chainId];
+        if (oneInchService) {
+          const tokens = await oneInchService.getTokenList();
+          
+          // Convert 1inch token format to our Token format
+          return Object.entries(tokens).map(([address, token]: [string, any]) => ({
+            symbol: token.symbol,
+            name: token.name,
+            address: address,
+            decimals: token.decimals,
+            logoURI: token.logoURI,
+            chainId: chainId,
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching tokens from 1inch:', error);
+    }
+    
+    // Fallback to static token list
+    return DEFAULT_TOKENS[chainId] || [];
+  }
+
+  // Search tokens by name or symbol
+  async searchTokens(chainId: number | string, query: string): Promise<Token[]> {
+    try {
+      if (typeof chainId === 'number') {
+        const oneInchService = oneInchServices[chainId];
+        if (oneInchService) {
+          const tokens = await oneInchService.searchTokens(query);
+          
+          // Convert to our Token format
+          return tokens.map((token: any) => ({
+            symbol: token.symbol,
+            name: token.name,
+            address: token.address,
+            decimals: token.decimals,
+            logoURI: token.logoURI,
+            chainId: chainId,
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Error searching tokens:', error);
+    }
+    
+    // Fallback to filtering static list
+    const allTokens = await this.getTokensForChain(chainId);
+    return allTokens.filter(token => 
+      token.symbol.toLowerCase().includes(query.toLowerCase()) ||
+      token.name.toLowerCase().includes(query.toLowerCase())
+    );
+  }
+
+  // Get multiple token balances at once
+  async getMultipleTokenBalances(
+    chain: string,
+    tokenAddresses: string[],
+    userAddress: string
+  ): Promise<Record<string, string>> {
+    const chainConfig = this.getChainConfig(chain);
+    const result: Record<string, string> = {};
+
+    if (chainConfig.type === "EVM") {
+      const chainId = chainConfig.id as number;
+      const oneInchService = oneInchServices[chainId];
+      
+      if (oneInchService) {
+        try {
+          const balances = await oneInchService.getBalances({
+            walletAddress: userAddress,
+            contractAddresses: tokenAddresses
+          });
+          
+          // Get token info for decimals
+          const tokenInfoPromises = tokenAddresses.map(addr => 
+            oneInchService.getTokenByAddress(addr)
+          );
+          const tokenInfos = await Promise.all(tokenInfoPromises);
+          
+          tokenAddresses.forEach((addr, index) => {
+            const balance = balances[addr.toLowerCase()];
+            const tokenInfo = tokenInfos[index];
+            if (balance) {
+              result[addr] = ethers.formatUnits(balance, tokenInfo?.decimals || 18);
+            } else {
+              result[addr] = "0";
+            }
+          });
+          
+          return result;
+        } catch (error) {
+          console.error('Error fetching multiple balances:', error);
+        }
+      }
+    }
+    
+    // Fallback to individual balance queries
+    for (const tokenAddress of tokenAddresses) {
+      try {
+        result[tokenAddress] = await this.getTokenBalance(chain, tokenAddress, userAddress);
+      } catch {
+        result[tokenAddress] = "0";
+      }
+    }
+    
+    return result;
   }
 }
 

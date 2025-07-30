@@ -55,7 +55,7 @@ export function WalletConnect() {
             {SUPPORTED_CHAINS.map((chain) => (
               <DropdownMenuItem
                 key={chain.id}
-                onClick={() => switchChain(chain.id)}
+                onClick={() => switchChain(Number(chain.id))}
                 className="cursor-pointer"
               >
                 <div className="flex items-center gap-2">

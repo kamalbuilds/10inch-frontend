@@ -57,6 +57,38 @@ export function useWallet() {
     });
   };
 
+  // Check for existing connection on mount
+  useEffect(() => {
+    const checkConnection = async () => {
+      try {
+        if (!window.ethereum) return;
+
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const accounts = await provider.send("eth_accounts", []);
+        
+        if (accounts.length > 0) {
+          // Wallet is already connected
+          const signer = await provider.getSigner();
+          const network = await provider.getNetwork();
+          const balance = await provider.getBalance(accounts[0]);
+
+          setWalletState({
+            isConnected: true,
+            address: accounts[0],
+            chainId: Number(network.chainId),
+            balance: ethers.formatEther(balance),
+            provider,
+            signer,
+          });
+        }
+      } catch (error) {
+        console.error("Error checking wallet connection:", error);
+      }
+    };
+
+    checkConnection();
+  }, []);
+
   const switchChain = async (chainId: number) => {
     try {
       if (!window.ethereum) return;
@@ -115,8 +147,10 @@ export function useWallet() {
     window.ethereum.on("chainChanged", handleChainChanged);
 
     return () => {
-      window.ethereum.removeListener("accountsChanged", handleAccountsChanged);
-      window.ethereum.removeListener("chainChanged", handleChainChanged);
+      if (window.ethereum.removeListener) {
+        window.ethereum.removeListener("accountsChanged", handleAccountsChanged);
+        window.ethereum.removeListener("chainChanged", handleChainChanged);
+      }
     };
   }, [walletState.isConnected]);
 

@@ -13,6 +13,8 @@ import ChainSelector from "@/components/ChainSelector";
 import TokenSelector from "@/components/TokenSelector";
 import { WalletConnect } from "@/components/WalletConnect";
 import { useWallet } from "@/hooks/useWallet";
+import { useOKXWallet } from "@/hooks/useOKXWallet";
+import { useAptosWallet } from "@/hooks/useAptosWallet";
 import { fusionPlusService } from "@/services/fusionPlusService";
 import {
   SUPPORTED_CHAINS,
@@ -23,6 +25,16 @@ import {
 
 export default function SwapInterface() {
   const { isConnected, address, chainId, signer } = useWallet();
+  const { 
+    isConnected: isOKXConnected, 
+    address: okxAddress, 
+    chainId: okxChainId 
+  } = useOKXWallet();
+  const {
+    isConnected: isAptosConnected,
+    address: aptosAddress,
+    chainId: aptosChainId
+  } = useAptosWallet();
   
   const [fromChain, setFromChain] = useState<string | number>(1); // Ethereum
   const [toChain, setToChain] = useState<string | number>(137); // Polygon
@@ -152,7 +164,12 @@ export default function SwapInterface() {
   }, [fromAmount, fromChain, toChain, fromToken, toToken]);
 
   const handleSwap = async () => {
-    console.log("Swap button clicked:", { isConnected, signer, address });
+    // Determine active wallet
+    const activeAddress = address || okxAddress || aptosAddress;
+    const activeChainId = chainId || okxChainId || aptosChainId;
+    const isAnyWalletConnected = isConnected || isOKXConnected || isAptosConnected;
+    
+    console.log("Swap button clicked:", { isConnected, isOKXConnected, isAptosConnected, signer, activeAddress });
     
     const fromChainConfig = SUPPORTED_CHAINS.find(c => c.id === fromChain);
     const toChainConfig = SUPPORTED_CHAINS.find(c => c.id === toChain);
@@ -163,8 +180,20 @@ export default function SwapInterface() {
       return;
     }
     
-    // For non-EVM chains, check if we have an address (even if no signer)
-    if (fromChainConfig?.type !== 'EVM' && !address && !recipientAddress) {
+    // For TON chain, check OKX wallet connection
+    if (fromChainConfig?.type === 'TON' && !isOKXConnected) {
+      setSwapError("Please connect your OKX wallet for TON transactions");
+      return;
+    }
+    
+    // For Aptos chain, check OKX wallet connection
+    if (fromChainConfig?.type === 'APTOS' && !isAptosConnected) {
+      setSwapError("Please connect your OKX wallet for Aptos transactions");
+      return;
+    }
+    
+    // For other non-EVM chains, check if we have an address (even if no signer)
+    if (fromChainConfig?.type !== 'EVM' && fromChainConfig?.type !== 'TON' && fromChainConfig?.type !== 'APTOS' && !activeAddress && !recipientAddress) {
       setSwapError("Please connect your wallet or provide a recipient address");
       return;
     }
@@ -174,8 +203,8 @@ export default function SwapInterface() {
       return;
     }
 
-    // Check if non-EVM chain requires private key
-    if (fromChainConfig.type !== 'EVM' && !nonEvmPrivateKey) {
+    // Check if non-EVM chain (except TON and Aptos) requires private key
+    if (fromChainConfig.type !== 'EVM' && fromChainConfig.type !== 'TON' && fromChainConfig.type !== 'APTOS' && !nonEvmPrivateKey) {
       setSwapError(`Private key required for ${fromChainConfig.name} transactions`);
       return;
     }
@@ -190,11 +219,11 @@ export default function SwapInterface() {
           fromToken,
           toToken,
           amount: fromAmount,
-          recipient: recipientAddress || address!,
-          senderAddress: address!,
-          privateKey: fromChainConfig.type !== 'EVM' ? nonEvmPrivateKey : undefined,
+          recipient: recipientAddress || activeAddress!,
+          senderAddress: activeAddress!,
+          privateKey: fromChainConfig.type !== 'EVM' && fromChainConfig.type !== 'TON' && fromChainConfig.type !== 'APTOS' ? nonEvmPrivateKey : undefined,
         },
-        fromChainConfig.type === 'EVM' ? signer : undefined
+        fromChainConfig.type === 'EVM' ? signer || undefined : undefined
       );
       
       alert(`Swap initiated! ID: ${swapId}`);
@@ -373,10 +402,10 @@ export default function SwapInterface() {
               </motion.div>
             )}
 
-            {/* Non-EVM Private Key Input */}
+            {/* Non-EVM Private Key Input (excluding TON and Aptos) */}
             {(() => {
               const fromChainConfig = SUPPORTED_CHAINS.find(c => c.id === fromChain);
-              return fromChainConfig?.type !== 'EVM' ? (
+              return fromChainConfig?.type !== 'EVM' && fromChainConfig?.type !== 'TON' && fromChainConfig?.type !== 'APTOS' ? (
                 <motion.div variants={item} className="space-y-2">
                   <Label className="text-gray-400">Private Key (Required for {fromChainConfig?.name})</Label>
                   <Input
@@ -425,6 +454,10 @@ export default function SwapInterface() {
                   </>
                 ) : !isConnected && SUPPORTED_CHAINS.find(c => c.id === fromChain)?.type === 'EVM' ? (
                   "Connect Wallet"
+                ) : !isOKXConnected && SUPPORTED_CHAINS.find(c => c.id === fromChain)?.type === 'TON' ? (
+                  "Connect OKX Wallet"
+                ) : !isAptosConnected && SUPPORTED_CHAINS.find(c => c.id === fromChain)?.type === 'APTOS' ? (
+                  "Connect OKX Wallet"
                 ) : (
                   swapMode === "simple" ? "Swap Tokens" : "Cross-Chain Swap"
                 )}

@@ -11,7 +11,7 @@ export interface ChainConfig {
   id: number | string; // Support both numeric (EVM) and string (non-EVM) chain IDs
   name: string;
   network: string;
-  type?: 'EVM' | 'SOLANA' | 'APTOS' | 'SUI' | 'NEAR' | 'COSMOS' | 'TRON' | 'STELLAR';
+  type?: 'EVM' | 'SOLANA' | 'APTOS' | 'SUI' | 'NEAR' | 'COSMOS' | 'TRON' | 'STELLAR' | 'TON';
   nativeCurrency: {
     name: string;
     symbol: string;
@@ -219,6 +219,20 @@ export const SUPPORTED_CHAINS: ChainConfig[] = [
     rpcUrls: ["https://horizon.stellar.org"],
     blockExplorerUrls: ["https://stellar.expert"],
     logoURI: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/stellar/info/logo.png",
+  },
+  {
+    id: "ton",
+    name: "TON",
+    network: "ton",
+    type: "TON",
+    nativeCurrency: {
+      name: "Toncoin",
+      symbol: "TON",
+      decimals: 9,
+    },
+    rpcUrls: ["https://toncenter.com/api/v2/jsonRPC"],
+    blockExplorerUrls: ["https://tonscan.org"],
+    logoURI: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ton/info/logo.png",
   },
 ];
 
@@ -541,6 +555,32 @@ export const DEFAULT_TOKENS: Record<number | string, Token[]> = {
       chainId: "stellar",
     },
   ],
+  ton: [
+    {
+      symbol: "TON",
+      name: "Toncoin",
+      address: "native",
+      decimals: 9,
+      logoURI: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ton/info/logo.png",
+      chainId: "ton",
+    },
+    {
+      symbol: "USDT",
+      name: "Tether USD", 
+      address: "EQCxE6mUtQJKFnGfaROTKOtYEqW-SjWTSqkw7FrYaA_0_Rov",
+      decimals: 6,
+      logoURI: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png",
+      chainId: "ton",
+    },
+    {
+      symbol: "USDC",
+      name: "USD Coin",
+      address: "EQDg6iu0d8A30hgV7lkUlj0WE7S1j1r-NcF8W5LTpD78Hnvr",
+      decimals: 6,
+      logoURI: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png",
+      chainId: "ton",
+    },
+  ],
 };
 
 // Non-EVM chains configuration
@@ -573,6 +613,6 @@ export const NON_EVM_CHAINS = {
   TON: {
     name: "TON",
     id: "ton",
-    logoURI: "https://cryptologos.cc/logos/toncoin-ton-logo.png",
+    logoURI: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ton/info/logo.png",
   },
 };

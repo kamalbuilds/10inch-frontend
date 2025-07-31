@@ -1,7 +1,7 @@
 import { ethers } from "ethers";
 import axios from "axios";
 import { Connection, PublicKey, Keypair, Transaction } from "@solana/web3.js";
-import { AptosClient, AptosAccount, HexString } from "aptos";
+import { AptosClient } from "aptos";
 import { JsonRpcProvider  } from "ethers";
 import { connect as nearConnect, keyStores, utils as nearUtils } from "near-api-js";
 import { SigningStargateClient } from "@cosmjs/stargate";
@@ -11,6 +11,9 @@ import StellarSdk from "stellar-sdk";
 import { TransactionBlock } from '@mysten/sui.js/transactions';
 import OneInchService, { oneInchServices, ONE_INCH_CHAINS } from './oneInchService';
 import { Token, DEFAULT_TOKENS } from '@/config/tokens';
+import { coingeckoService } from './coingeckoService';
+import type { OKXAptosService } from './okxAptosService';
+import type { OKXWalletService } from './okxWalletService';
 
 export interface SwapParams {
   fromChain: string; // Changed from number to string to support non-numeric chain IDs
@@ -48,7 +51,7 @@ export interface SwapStatus {
 const CHAIN_CONFIGS = {
   // EVM Chains
   ETHEREUM: { id: 1, rpc: "https://eth.llamarpc.com", type: "EVM" },
-  SEPOLIA: { id: 11155111, rpc: "https://eth-sepolia.g.alchemy.com/v2/demo", type: "EVM" },
+  SEPOLIA: { id: 11155111, rpc: "https://ethereum-sepolia-rpc.publicnode.com", type: "EVM" },
   BSC: { id: 56, rpc: "https://bsc-dataseed.binance.org", type: "EVM" },
   POLYGON: { id: 137, rpc: "https://polygon-rpc.com", type: "EVM" },
   ARBITRUM: { id: 42161, rpc: "https://arb1.arbitrum.io/rpc", type: "EVM" },
@@ -56,13 +59,13 @@ const CHAIN_CONFIGS = {
   AVALANCHE: { id: 43114, rpc: "https://api.avax.network/ext/bc/C/rpc", type: "EVM" },
   
   // Non-EVM Chains
-  SOLANA: { id: "solana", rpc: "https://api.mainnet-beta.solana.com", type: "SOLANA" },
   APTOS: { id: "aptos", rpc: "https://fullnode.mainnet.aptoslabs.com", type: "APTOS" },
   SUI: { id: "sui", rpc: "https://fullnode.mainnet.sui.io", type: "SUI" },
   NEAR: { id: "near", rpc: "https://rpc.mainnet.near.org", type: "NEAR" },
   COSMOS: { id: "cosmos", rpc: "https://rpc.cosmos.network", type: "COSMOS" },
   TRON: { id: "tron", rpc: "https://api.trongrid.io", type: "TRON" },
   STELLAR: { id: "stellar", rpc: "https://horizon.stellar.org", type: "STELLAR" },
+  TON: { id: "ton", rpc: "https://toncenter.com/api/v2/jsonRPC", type: "TON" },
 };
 
 class FusionPlusService {
@@ -70,6 +73,8 @@ class FusionPlusService {
   private evmProviders: Map<number, ethers.Provider>;
   private nonEvmClients: Map<string, any>;
   private swapContracts: Map<string, string>;
+  private okxAptosService: OKXAptosService | null = null;
+  private okxWalletService: OKXWalletService | null = null;
 
   constructor() {
     this.apiUrl = process.env.NEXT_PUBLIC_FUSION_API_URL || "http://localhost:3001";
@@ -94,8 +99,6 @@ class FusionPlusService {
 
   private async initializeNonEvmClients() {
     try {
-      // Solana
-      this.nonEvmClients.set("solana", new Connection(CHAIN_CONFIGS.SOLANA.rpc));
 
       // Aptos
       this.nonEvmClients.set("aptos", new AptosClient(CHAIN_CONFIGS.APTOS.rpc));
@@ -130,18 +133,31 @@ class FusionPlusService {
     // Contract addresses for each chain
     this.swapContracts.set("ETHEREUM", process.env.NEXT_PUBLIC_ETH_HTLC_ADDRESS || "");
     this.swapContracts.set("BSC", process.env.NEXT_PUBLIC_BSC_HTLC_ADDRESS || "");
-    this.swapContracts.set("POLYGON", process.env.NEXT_PUBLIC_POLYGON_HTLC_ADDRESS || "");
+    this.swapContracts.set("POLYGON", process.env.NEXT_PUBLIC_POLYGON_HTLC_ADDRESS || "0xC8973d8f3cd4Ee6bd5358AcDbE9a4CA517BDd129");
     this.swapContracts.set("ARBITRUM", process.env.NEXT_PUBLIC_ARBITRUM_HTLC_ADDRESS || "");
     this.swapContracts.set("OPTIMISM", process.env.NEXT_PUBLIC_OPTIMISM_HTLC_ADDRESS || "");
     this.swapContracts.set("AVALANCHE", process.env.NEXT_PUBLIC_AVALANCHE_HTLC_ADDRESS || "");
     
     // Non-EVM contract addresses
-    this.swapContracts.set("APTOS", process.env.NEXT_PUBLIC_APTOS_MODULE_ADDRESS || "0x1::fusion_htlc");
+    this.swapContracts.set("APTOS", process.env.NEXT_PUBLIC_APTOS_MODULE_ADDRESS || "0x92ecf7c4a7ce7c79630c884bef0b06fa447ec9c1cbcd55d98183e7808478376c");
     this.swapContracts.set("SUI", process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || "");
     this.swapContracts.set("NEAR", process.env.NEXT_PUBLIC_NEAR_CONTRACT_ID || "fusion-plus.near");
     this.swapContracts.set("COSMOS", process.env.NEXT_PUBLIC_COSMOS_CONTRACT_ADDRESS || "");
     this.swapContracts.set("TRON", process.env.NEXT_PUBLIC_TRON_CONTRACT_ADDRESS || "");
     this.swapContracts.set("STELLAR", process.env.NEXT_PUBLIC_STELLAR_CONTRACT_ID || "");
+    this.swapContracts.set("TON", process.env.NEXT_PUBLIC_TON_CONTRACT_ADDRESS || "");
+    
+    // Relayer contracts
+    this.swapContracts.set("POLYGON_RELAYER", process.env.NEXT_PUBLIC_POLYGON_RELAYER_ADDRESS || "0x647f1146F53a2a6F9d4fb827603b916b5E72A335");
+  }
+
+  // Set wallet services for non-EVM chains
+  setOKXAptosService(service: OKXAptosService): void {
+    this.okxAptosService = service;
+  }
+
+  setOKXWalletService(service: OKXWalletService): void {
+    this.okxWalletService = service;
   }
 
   async getSwapQuote(params: SwapParams): Promise<SwapQuote> {
@@ -199,14 +215,39 @@ class FusionPlusService {
         }
       }
 
-      // For cross-chain swaps, use existing logic or implement cross-chain quote
+      // For cross-chain swaps and non-EVM chains, use CoinGecko API
       const estimatedTime = this.calculateEstimatedTime(params.fromChain, params.toChain);
       const fromGas = await this.estimateGasForChain(params.fromChain, "create");
       const toGas = await this.estimateGasForChain(params.toChain, "claim");
 
-      // Simple rate calculation for cross-chain (would need proper oracle in production)
+      // Get token symbols from addresses or use directly
+      let fromTokenSymbol = params.fromToken;
+      let toTokenSymbol = params.toToken;
+      
+      // Handle native tokens
+      if (params.fromToken === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' || params.fromToken === 'native') {
+        fromTokenSymbol = this.getNativeTokenSymbol(params.fromChain);
+      }
+      if (params.toToken === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' || params.toToken === 'native') {
+        toTokenSymbol = this.getNativeTokenSymbol(params.toChain);
+      }
+      
+      // Get quote from CoinGecko
+      const quote = await coingeckoService.getSwapQuote(
+        fromTokenSymbol,
+        toTokenSymbol,
+        parseFloat(params.amount)
+      );
+      
       let rate = "1";
       let toAmount = params.amount;
+      
+      if (quote) {
+        toAmount = quote.estimatedOutput.toFixed(6);
+        rate = quote.exchangeRate.toFixed(6);
+      } else {
+        console.warn('Failed to get quote from CoinGecko, using 1:1 rate');
+      }
       
       // Add some basic rate conversions for demo
       if (params.fromChain !== params.toChain) {
@@ -246,6 +287,22 @@ class FusionPlusService {
         estimatedTime: 300,
         route: [params.fromChain, "Fusion Bridge", params.toChain],
       };
+    }
+  }
+
+  // Hash adapter for cross-chain compatibility
+  private getHashForChain(secret: string, chain: string): string {
+    const chainConfig = this.getChainConfig(chain);
+    
+    if (chainConfig.type === "EVM") {
+      // EVM chains use keccak256
+      return ethers.keccak256(secret);
+    } else if (chain === "APTOS" || chain === "SUI") {
+      // Move-based chains use SHA256
+      return ethers.sha256(secret);
+    } else {
+      // Default to keccak256 for other chains
+      return ethers.keccak256(secret);
     }
   }
 
@@ -338,7 +395,10 @@ class FusionPlusService {
       // For cross-chain swaps, use HTLC logic
       // Generate secret and hashlock
       const secret = ethers.hexlify(ethers.randomBytes(32));
-      const hashlock = ethers.sha256(secret);
+      // Use appropriate hash for source chain
+      const hashlockFrom = this.getHashForChain(secret, params.fromChain);
+      // Store both hashes if chains use different algorithms
+      const hashlockTo = this.getHashForChain(secret, params.toChain);
       const swapId = ethers.hexlify(ethers.randomBytes(16));
 
       // Set timelock (2 hours for cross-chain)
@@ -349,31 +409,34 @@ class FusionPlusService {
       // Execute based on source chain type
       if (fromChainConfig.type === "EVM") {
         console.log("Executing EVM HTLC from chain", params.fromChain);
-        fromChainTx = await this.executeEvmHTLC(params, signer!, hashlock, timelock);
+        fromChainTx = await this.executeEvmHTLC(params, signer!, hashlockFrom, timelock);
       } else {
         console.log("Executing non-EVM HTLC from chain", params.fromChain);
         // Handle non-EVM chains
         switch (params.fromChain) {
           case "SOLANA":
-            fromChainTx = await this.executeSolanaHTLC(params, hashlock, timelock);
+            fromChainTx = await this.executeSolanaHTLC(params, hashlockFrom, timelock);
             break;
           case "APTOS":
-            fromChainTx = await this.executeAptosHTLC(params, hashlock, timelock);
+            fromChainTx = await this.executeAptosHTLC(params, hashlockFrom, timelock);
             break;
           case "SUI":
-            fromChainTx = await this.executeSuiHTLC(params, hashlock, timelock);
+            fromChainTx = await this.executeSuiHTLC(params, hashlockFrom, timelock);
             break;
           case "NEAR":
-            fromChainTx = await this.executeNearHTLC(params, hashlock, timelock);
+            fromChainTx = await this.executeNearHTLC(params, hashlockFrom, timelock);
             break;
           case "COSMOS":
-            fromChainTx = await this.executeCosmosHTLC(params, hashlock, timelock);
+            fromChainTx = await this.executeCosmosHTLC(params, hashlockFrom, timelock);
             break;
           case "TRON":
-            fromChainTx = await this.executeTronHTLC(params, hashlock, timelock);
+            fromChainTx = await this.executeTronHTLC(params, hashlockFrom, timelock);
             break;
           case "STELLAR":
-            fromChainTx = await this.executeStellarHTLC(params, hashlock, timelock);
+            fromChainTx = await this.executeStellarHTLC(params, hashlockFrom, timelock);
+            break;
+          case "TON":
+            fromChainTx = await this.executeTonHTLC(params, hashlockFrom, timelock);
             break;
           default:
             throw new Error(`Unsupported chain: ${params.fromChain}`);
@@ -387,14 +450,14 @@ class FusionPlusService {
         fromChainTx,
         timestamp: Date.now(),
         secret,
-        hashlock,
+        hashlock: hashlockFrom,
         expiryTime: timelock * 1000,
       };
 
       // Save to backend
       await this.saveSwapStatus(swapStatus);
 
-      // Notify resolver service
+      // Notify resolver service with appropriate hashlocks
       await this.notifyResolver({
         swapId,
         fromChain: params.fromChain,
@@ -403,7 +466,8 @@ class FusionPlusService {
         toToken: params.toToken,
         amount: params.amount,
         recipient: params.recipient || params.senderAddress!,
-        hashlock,
+        hashlockFrom,
+        hashlockTo,
         timelock,
       });
 
@@ -484,28 +548,36 @@ class FusionPlusService {
     const client = this.nonEvmClients.get("aptos");
     const moduleAddress = this.swapContracts.get("APTOS");
     
-    if (!params.privateKey) throw new Error("Private key required for Aptos");
+    if (!this.okxAptosService) {
+      throw new Error("OKX Aptos wallet service not initialized");
+    }
     
-    const account = new AptosAccount(new HexString(params.privateKey).toUint8Array());
+    const account = this.okxAptosService.getAccount();
+    if (!account) {
+      throw new Error("Please connect your OKX wallet for Aptos transactions");
+    }
+    
+    // Convert hashlock to bytes array for Aptos
+    const hashlockBytes = Array.from(Buffer.from(hashlock.slice(2), 'hex'));
     
     const payload = {
-      type: "entry_function_payload",
-      function: `${moduleAddress}::create_htlc`,
-      type_arguments: ["0x1::aptos_coin::AptosCoin"],
-      arguments: [
-        params.recipient,
-        hashlock,
-        timelock,
-        params.amount
+      function: `${moduleAddress}::fusion_htlc::create_htlc`,
+      typeArguments: ["0x1::aptos_coin::AptosCoin"],
+      functionArguments: [
+        moduleAddress, // module_addr parameter
+        params.recipient || account.address,
+        params.amount,
+        hashlockBytes,
+        timelock.toString()
       ]
     };
 
-    const txnRequest = await client.generateTransaction(account.address(), payload);
-    const signedTxn = await client.signTransaction(account, txnRequest);
-    const txnResult = await client.submitTransaction(signedTxn);
-    await client.waitForTransaction(txnResult.hash);
+    console.log("Aptos HTLC payload:", payload);
+
+    // Use OKX wallet to sign and submit transaction
+    const result = await this.okxAptosService.signAndSubmitTransaction(payload);
     
-    return txnResult.hash;
+    return result.hash;
   }
 
   // Sui HTLC execution
@@ -579,6 +651,7 @@ class FusionPlusService {
 
   // Helper methods
   private getChainConfig(chain: string) {
+    
     const config = Object.entries(CHAIN_CONFIGS).find(([name]) => name === chain);
     if (!config) throw new Error(`Unknown chain: ${chain}`);
     return config[1];
@@ -617,6 +690,45 @@ class FusionPlusService {
     return [fromChain, "1inch Fusion+", toChain];
   }
 
+  private getNativeTokenSymbol(chain: string): string {
+    const chainUpper = chain.toUpperCase();
+    switch (chainUpper) {
+      case "ETHEREUM":
+      case "SEPOLIA":
+        return "ETH";
+      case "BSC":
+      case "BNB_SMART_CHAIN":
+        return "BNB";
+      case "POLYGON":
+        return "MATIC";
+      case "ARBITRUM":
+      case "OPTIMISM":
+        return "ETH";
+      case "AVALANCHE":
+        return "AVAX";
+      case "SOLANA":
+        return "SOL";
+      case "APTOS":
+      case "APTOS_TESTNET":
+        return "APT";
+      case "SUI":
+        return "SUI";
+      case "NEAR":
+        return "NEAR";
+      case "COSMOS":
+        return "ATOM";
+      case "TRON":
+        return "TRX";
+      case "STELLAR":
+        return "XLM";
+      case "TON":
+        return "TON";
+      default:
+        console.warn(`Unknown chain for native token: ${chain}`);
+        return chain;
+    }
+  }
+
   private async estimateGasForChain(chain: string, operation: "create" | "claim"): Promise<string> {
     const config = this.getChainConfig(chain);
     
@@ -625,6 +737,8 @@ class FusionPlusService {
       if (!provider) return "0.001";
       
       const feeData = await provider.getFeeData();
+      console.log(feeData,"fee data");
+
       const gasPrice = feeData.gasPrice || BigInt(0);
       const gasLimit = operation === "create" ? BigInt(200000) : BigInt(100000);
       
@@ -774,6 +888,55 @@ class FusionPlusService {
     const result = await server.submitTransaction(transaction);
     
     return result.hash;
+  }
+
+  // TON HTLC execution
+  private async executeTonHTLC(params: SwapParams, hashlock: string, timelock: number): Promise<string> {
+    if (!this.okxWalletService) {
+      throw new Error("OKX TON wallet service not initialized");
+    }
+    
+    const account = this.okxWalletService.getAccount();
+    if (!account) {
+      throw new Error("Please connect your OKX wallet for TON transactions");
+    }
+    
+    const contractAddress = this.swapContracts.get("TON");
+    if (!contractAddress) {
+      throw new Error("TON HTLC contract address not configured");
+    }
+    
+    // Build TON transaction for HTLC creation
+    const transaction = {
+      validUntil: Date.now() / 1000 + 360, // 6 minutes validity
+      from: account.address,
+      messages: [
+        {
+          address: contractAddress,
+          amount: params.amount, // Amount in nanoTON
+          payload: this.buildTonHTLCPayload(params.recipient || "", hashlock, timelock)
+        }
+      ]
+    };
+    
+    // Use OKX wallet to send transaction
+    const result = await this.okxWalletService.sendTransaction(transaction);
+    
+    return result.boc; // Return the BOC (Bag of Cells) as transaction ID
+  }
+  
+  // Helper method to build TON HTLC payload
+  private buildTonHTLCPayload(recipient: string, hashlock: string, timelock: number): string {
+    // This is a simplified version - actual implementation would need proper BOC encoding
+    // For now, we'll use a base64 encoded payload
+    const payload = {
+      op: "create_htlc",
+      recipient,
+      hashlock,
+      timelock
+    };
+    
+    return Buffer.from(JSON.stringify(payload)).toString('base64');
   }
 
   // Solana HTLC execution (placeholder for now as it's more complex)

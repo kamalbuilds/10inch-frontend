@@ -16,6 +16,8 @@ import { useWallet } from "@/hooks/useWallet";
 import { useOKXWallet } from "@/hooks/useOKXWallet";
 import { useAptosWallet } from "@/hooks/useAptosWallet";
 import { fusionPlusService } from "@/services/fusionPlusService";
+import { getOKXAptosService } from "@/services/okxAptosService";
+import { getOKXWalletService } from "@/services/okxWalletService";
 import {
   SUPPORTED_CHAINS,
   DEFAULT_TOKENS,
@@ -107,6 +109,30 @@ export default function SwapInterface() {
     getTokensForChain(toChain);
   }, []);
 
+  // Set wallet services when connected
+  useEffect(() => {
+    try {
+      if (isOKXConnected) {
+        const okxService = getOKXWalletService({
+          name: "Fusion Plus",
+          icon: window.location.origin + "/favicon.ico"
+        });
+        fusionPlusService.setOKXWalletService(okxService);
+      }
+      
+      if (isAptosConnected) {
+        const aptosService = getOKXAptosService({
+          name: "Fusion Plus",
+          icon: window.location.origin + "/favicon.ico",
+          network: (process.env.NEXT_PUBLIC_APTOS_NETWORK as 'mainnet' | 'testnet') || "testnet"
+        });
+        fusionPlusService.setOKXAptosService(aptosService);
+      }
+    } catch (error) {
+      console.error("Failed to set wallet services:", error);
+    }
+  }, [isOKXConnected, isAptosConnected]);
+
   // Debug wallet state
   useEffect(() => {
     console.log("Wallet state updated:", { isConnected, address, signer: !!signer });
@@ -134,11 +160,27 @@ export default function SwapInterface() {
           if (fromChainName === 'BNB SMART CHAIN') fromChainName = 'BSC';
           if (toChainName === 'BNB SMART CHAIN') toChainName = 'BSC';
           
+          // For non-EVM chains, use token symbols instead of addresses
+          let fromTokenParam = fromToken;
+          let toTokenParam = toToken;
+          
+          if (fromChainConfig.type !== 'EVM') {
+            // Get token symbol from the token data
+            const fromTokenData = chainTokens[fromChain]?.find(t => t.address === fromToken || t.symbol === fromToken);
+            fromTokenParam = fromTokenData?.symbol || fromToken;
+          }
+          
+          if (toChainConfig.type !== 'EVM') {
+            // Get token symbol from the token data
+            const toTokenData = chainTokens[toChain]?.find(t => t.address === toToken || t.symbol === toToken);
+            toTokenParam = toTokenData?.symbol || toToken;
+          }
+          
           const quote = await fusionPlusService.getSwapQuote({
             fromChain: fromChainName,
             toChain: toChainName,
-            fromToken,
-            toToken,
+            fromToken: fromTokenParam,
+            toToken: toTokenParam,
             amount: fromAmount,
           });
           setToAmount(quote.toAmount);
@@ -437,13 +479,49 @@ export default function SwapInterface() {
             {/* Swap Button */}
             <motion.div variants={item}>
               <Button
-                disabled={
-                  !isConnected|| 
-                  !fromAmount || 
-                  parseFloat(fromAmount) <= 0 || 
-                  isLoading || 
-                  quoteLoading
-                }
+                disabled={(() => {
+                  const fromChainConfig = SUPPORTED_CHAINS.find(c => c.id === fromChain);
+                  
+                  // Check if wallet is connected based on chain type
+                  const isWalletConnected = fromChainConfig?.type === 'TON' ? isOKXConnected :
+                                          fromChainConfig?.type === 'APTOS' ? isAptosConnected :
+                                          isConnected; // For EVM and other chains
+                  
+                  const conditions = {
+                    notConnected: !isWalletConnected,
+                    noFromAmount: !fromAmount,
+                    invalidAmount: parseFloat(fromAmount) <= 0,
+                    isLoading: isLoading,
+                    quoteLoading: quoteLoading
+                  };
+                  
+                  const isDisabled = !isWalletConnected || 
+                    !fromAmount || 
+                    parseFloat(fromAmount) <= 0 || 
+                    isLoading || 
+                    quoteLoading;
+                  
+                  const walletStates = {
+                    evmConnected: isConnected,
+                    okxTonConnected: isOKXConnected,
+                    okxAptosConnected: isAptosConnected,
+                    fromChainType: fromChainConfig?.type,
+                    fromChainId: fromChain
+                  };
+                  
+                  console.log('Swap Button Disabled Debug:', {
+                    isDisabled,
+                    conditions,
+                    walletStates,
+                    fromAmount,
+                    parsedAmount: fromAmount ? parseFloat(fromAmount) : 0,
+                    isWalletConnected,
+                    isLoading,
+                    quoteLoading
+                  });
+                  
+                  return isDisabled;
+                })()}
                 onClick={handleSwap}
                 className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:opacity-90 text-white disabled:opacity-50 disabled:cursor-not-allowed"
               >

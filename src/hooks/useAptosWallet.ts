@@ -26,7 +26,8 @@ export function useAptosWallet(): UseAptosWalletReturn {
     try {
       const service = getOKXAptosService({
         name: "Fusion Plus",
-        icon: window.location.origin + "/favicon.ico"
+        icon: window.location.origin + "/favicon.ico",
+        network: (process.env.NEXT_PUBLIC_APTOS_NETWORK as 'mainnet' | 'testnet') || "testnet"
       });
       setAptosService(service);
 

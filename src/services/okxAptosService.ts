@@ -1,6 +1,7 @@
 export interface AptosWalletConfig {
   name: string;
   icon: string;
+  network?: 'mainnet' | 'testnet';
 }
 
 export interface AptosTransactionPayload {
@@ -32,7 +33,15 @@ export class OKXAptosService {
     }
 
     try {
-      const response = await wallet.connect();
+      // Connect with network configuration
+      const network = this.config.network || 'mainnet';
+      const connectionParams = {
+        chain: `aptos:${network}`
+      };
+      
+      console.log('Connecting to OKX Aptos wallet with params:', connectionParams);
+      const response = await wallet.connect(connectionParams);
+      
       if (response && response.address) {
         this.account = {
           address: response.address,
@@ -170,17 +179,3 @@ export const getOKXAptosService = (config?: AptosWalletConfig): OKXAptosService 
   return okxAptosService;
 };
 
-// Type declarations for window object
-declare global {
-  interface Window {
-    okxwallet?: {
-      aptos?: {
-        connect: () => Promise<any>;
-        disconnect: () => Promise<any>;
-        signAndSubmitTransaction: (transaction: any) => Promise<any>;
-        signMessage: (params: any) => Promise<any>;
-        network: () => Promise<any>;
-      };
-    };
-  }
-}

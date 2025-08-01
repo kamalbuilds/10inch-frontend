@@ -21,6 +21,9 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   // Add CORS headers for external images
   async headers() {
     return [

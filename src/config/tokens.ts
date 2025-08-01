@@ -151,20 +151,6 @@ export const SUPPORTED_CHAINS: ChainConfig[] = [
     logoURI: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/aptos/info/logo.png",
   },
   {
-    id: "aptos-testnet",
-    name: "Aptos Testnet",
-    network: "aptos-testnet",
-    type: "APTOS",
-    nativeCurrency: {
-      name: "APT",
-      symbol: "APT",
-      decimals: 8,
-    },
-    rpcUrls: ["https://fullnode.testnet.aptoslabs.com/v1"],
-    blockExplorerUrls: ["https://explorer.aptoslabs.com/?network=testnet"],
-    logoURI: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/aptos/info/logo.png",
-  },
-  {
     id: "sui",
     name: "Sui",
     network: "sui",
@@ -176,7 +162,7 @@ export const SUPPORTED_CHAINS: ChainConfig[] = [
     },
     rpcUrls: ["https://fullnode.mainnet.sui.io"],
     blockExplorerUrls: ["https://suiexplorer.com"],
-    logoURI: "https://assets.coingecko.com/coins/images/26375/standard/sui-ocean-square.png?1727791290",
+    logoURI: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/sui/info/logo.png",
   },
   {
     id: "near",

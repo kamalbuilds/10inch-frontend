@@ -15,6 +15,7 @@ import { coingeckoService } from './coingeckoService';
 import type { OKXAptosService } from './okxAptosService';
 import type { OKXWalletService } from './okxWalletService';
 
+
 export interface SwapParams {
   fromChain: string; // Changed from number to string to support non-numeric chain IDs
   toChain: string;
@@ -106,14 +107,6 @@ class FusionPlusService {
       // Sui
       this.nonEvmClients.set("sui", new JsonRpcProvider(CHAIN_CONFIGS.SUI.rpc));
 
-      // NEAR
-      const nearConfig = {
-        networkId: "mainnet",
-        keyStore: new keyStores.InMemoryKeyStore(),
-        nodeUrl: CHAIN_CONFIGS.NEAR.rpc,
-      };
-      const near = await nearConnect(nearConfig);
-      this.nonEvmClients.set("near", near);
 
       // Tron
       const tronWeb = new TronWeb({
@@ -306,6 +299,94 @@ class FusionPlusService {
       // Default to keccak256 for other chains
       return ethers.keccak256(secret);
     }
+  }
+
+  // Convert amount to chain's smallest unit
+  private convertAmountToChainUnit(amount: string, chain: string, tokenAddress?: string): string {
+    const chainConfig = this.getChainConfig(chain);
+    
+    // Validate amount
+    const numAmount = parseFloat(amount);
+
+    console.log(numAmount,"num amount");
+
+    if (isNaN(numAmount) || numAmount <= 0) {
+      throw new Error(`Invalid amount: ${amount}`);
+    }
+    
+    // For native tokens
+    if (!tokenAddress || tokenAddress === ethers.ZeroAddress || tokenAddress === 'native' || tokenAddress === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee') {
+      switch (chain) {
+        case "APTOS":
+          try {
+            console.log("aptos w>>> ")
+            // 1 APT = 10^8 Octas
+            // Use BigInt for precision with small amounts
+            const octasPerApt = BigInt(100000000); // 10^8
+            console.log(octasPerApt,"octas per apt");
+
+            const aptAmount = amount.includes('.') 
+              ? amount 
+              : amount + '.0'; // Ensure decimal point for parsing
+            const [whole, decimal = '0'] = aptAmount.split('.');
+            
+            // Ensure whole part is valid
+            const wholeNum = whole === '' ? '0' : whole;
+            const paddedDecimal = decimal.padEnd(8, '0').slice(0, 8);
+            
+            console.log("APTOS conversion debug:", {
+              originalAmount: amount,
+              whole: wholeNum,
+              decimal: decimal,
+              paddedDecimal: paddedDecimal
+            });
+            
+            const wholePart = BigInt(wholeNum) * octasPerApt;
+            const decimalPart = BigInt(paddedDecimal);
+            const totalOctas = wholePart + decimalPart;
+            
+            console.log("APTOS conversion result:", totalOctas.toString());
+            return totalOctas.toString();
+          } catch (error) {
+            console.error("Error converting APTOS amount:", error);
+            throw new Error(`Failed to convert amount ${amount} to Octas: ${error}`);
+          }
+          
+        case "SUI":
+          // 1 SUI = 10^9 MIST
+          const mistPerSui = BigInt(1000000000); // 10^9
+          const suiAmount = amount.includes('.') ? amount : amount + '.0';
+          const [suiWhole, suiDecimal = '0'] = suiAmount.split('.');
+          const paddedSuiDecimal = suiDecimal.padEnd(9, '0').slice(0, 9);
+          const totalMist = BigInt(suiWhole) * mistPerSui + BigInt(paddedSuiDecimal);
+          return totalMist.toString();
+          
+        case "NEAR":
+          // 1 NEAR = 10^24 yoctoNEAR
+          return ethers.parseUnits(amount, 24).toString();
+          
+        case "STELLAR":
+          // 1 XLM = 10^7 stroops
+          return Math.floor(parseFloat(amount) * 1e7).toString();
+          
+        case "TRON":
+          // 1 TRX = 10^6 Sun
+          return Math.floor(parseFloat(amount) * 1e6).toString();
+          
+        default:
+          // EVM chains and others use 18 decimals
+          return ethers.parseEther(amount).toString();
+      }
+    }
+    
+    // For tokens, we'd need to fetch decimals
+    // For now, assume 18 decimals for EVM tokens
+    if (chainConfig.type === "EVM") {
+      return ethers.parseUnits(amount, 18).toString();
+    }
+    
+    // Default to amount as-is for other token types
+    return amount;
   }
 
   async executeSwap(params: SwapParams, signer?: ethers.Signer): Promise<string> {
@@ -510,13 +591,17 @@ class FusionPlusService {
     const htlcContract = new ethers.Contract(htlcAddress, htlcAbi, signer);
 
     console.log(htlcAddress, "htlcAddress", htlcContract);
-    if (params.fromToken === ethers.ZeroAddress) {
+    
+    // Convert amount to chain's smallest unit
+    const amountInWei = this.convertAmountToChainUnit(params.amount, params.fromChain, params.fromToken);
+    
+    if (params.fromToken === ethers.ZeroAddress || params.fromToken === 'native') {
       // Native token (ETH, BNB, MATIC, etc.)
       const tx = await htlcContract.createHTLC(
         params.recipient || await signer.getAddress(),
         hashlock,
         timelock,
-        { value: ethers.parseEther(params.amount) }
+        { value: amountInWei }
       );
       const receipt = await tx.wait();
       return receipt.hash;
@@ -525,14 +610,14 @@ class FusionPlusService {
       // First approve token transfer
       const tokenAbi = ["function approve(address spender, uint256 amount) returns (bool)"];
       const tokenContract = new ethers.Contract(params.fromToken, tokenAbi, signer);
-      const approveTx = await tokenContract.approve(htlcAddress, ethers.parseEther(params.amount));
+      const approveTx = await tokenContract.approve(htlcAddress, amountInWei);
       await approveTx.wait();
 
       // Create token HTLC
       const tx = await htlcContract.createTokenHTLC(
         params.fromToken,
         params.recipient || await signer.getAddress(),
-        ethers.parseEther(params.amount),
+        amountInWei,
         hashlock,
         timelock
       );
@@ -558,28 +643,81 @@ class FusionPlusService {
     if (!account) {
       throw new Error("Please connect your OKX wallet for Aptos transactions");
     }
-
+    
+    if (!moduleAddress) {
+      throw new Error("Aptos HTLC contract not configured");
+    }
+    
     // Convert hashlock to bytes array for Aptos
     const hashlockBytes = Array.from(Buffer.from(hashlock.slice(2), 'hex'));
-
+    
+    console.log("params",params);
+    // Convert amount to Octas using the helper function
+    const amountInOctas = this.convertAmountToChainUnit(params.amount, "APTOS", params.fromToken);
+    
+    console.log("\n=== Aptos HTLC Execution Debug ===");
+    console.log("Input params:");
+    console.log("  Original amount:", params.amount);
+    console.log("  From token:", params.fromToken);
+    console.log("  Chain:", params.fromChain);
+    
+    console.log("\nConverted values:");
+    console.log("  Amount in Octas:", amountInOctas);
+    console.log("  Amount type:", typeof amountInOctas);
+    console.log("  Amount is valid number:", /^\d+$/.test(amountInOctas));
+    
+    console.log("\nContract details:");
+    console.log("  Module address:", moduleAddress);
+    console.log("  Recipient:", params.recipient || account.address);
+    console.log("  Hashlock (hex):", hashlock);
+    console.log("  Hashlock bytes length:", hashlockBytes.length);
+    console.log("  Timelock:", timelock);
+    console.log("=== End Debug ===");
+    
+    // Ensure amountInOctas is a string representing an integer
+    if (!amountInOctas || !/^\d+$/.test(amountInOctas)) {
+      throw new Error(`Invalid Octas amount: ${amountInOctas}. Expected integer string.`);
+    }
+    
+    // Build the payload with explicit typing
     const payload = {
-      function: `${moduleAddress}::fusion_htlc::create_htlc`,
+      function: `${moduleAddress}::fusion_htlc::create_htlc` as `${string}::${string}::${string}`,
       typeArguments: ["0x1::aptos_coin::AptosCoin"],
       functionArguments: [
-        moduleAddress, // module_addr parameter
-        params.recipient || account.address,
-        params.amount,
-        hashlockBytes,
-        timelock.toString()
+        moduleAddress, // module_addr parameter  
+        params.recipient || account.address, // recipient
+        amountInOctas, // Amount in Octas as string
+        hashlockBytes, // hashlock as byte array
+        timelock.toString() // timelock as string
       ]
     };
-
-    console.log("Aptos HTLC payload:", payload);
-
-    // Use OKX wallet to sign and submit transaction
-    const result = await this.okxAptosService.signAndSubmitTransaction(payload);
-
-    return result.hash;
+    
+    console.log("\nFinal payload:", JSON.stringify(payload, null, 2));
+    
+    try {
+      // Use OKX wallet to sign and submit transaction
+      const result = await this.okxAptosService.signAndSubmitTransaction(payload);
+      console.log("Transaction submitted successfully:", result.hash);
+      return result.hash;
+    } catch (error: any) {
+      console.error("\n=== Transaction Error ===");
+      console.error("Error:", error);
+      
+      // Check if this is the BigInt conversion error
+      if (error.message && error.message.includes('Cannot convert') && error.message.includes('to BigInt')) {
+        console.error("\nBigInt conversion error detected!");
+        console.error("This suggests OKX wallet is trying to convert the original decimal amount internally.");
+        console.error("Params that might be causing the issue:", {
+          originalAmount: params.amount,
+          amountInOctas: amountInOctas
+        });
+        
+        // Try a different approach - ensure no decimal amounts are accessible
+        throw new Error(`Transaction failed: OKX wallet cannot process decimal amounts. Please try using whole APT amounts (e.g., 1 APT instead of 0.01 APT) or contact OKX support about decimal amount handling.`);
+      }
+      
+      throw error;
+    }
   }
 
   // Sui HTLC execution
@@ -645,7 +783,7 @@ class FusionPlusService {
         timelock_seconds: timelock - Math.floor(Date.now() / 1000),
       },
       gas: "100000000000000",
-      attachedDeposit: nearUtils.format.parseNearAmount(params.amount),
+      attachedDeposit: this.convertAmountToChainUnit(params.amount, "NEAR", params.fromToken),
     });
 
     return result.transaction.hash;

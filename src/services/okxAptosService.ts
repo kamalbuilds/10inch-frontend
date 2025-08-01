@@ -1,3 +1,5 @@
+import { prepareOKXAptosTransaction } from '../utils/okxWalletFix';
+
 export interface AptosWalletConfig {
   name: string;
   icon: string;
@@ -103,18 +105,73 @@ export class OKXAptosService {
     }
 
     try {
+      console.log("\n=== OKX Aptos Transaction Debug ===");
+      console.log("Raw payload:", JSON.stringify(payload, null, 2));
+      
+      // Process function arguments to ensure proper types
+      const processedArguments = payload.functionArguments?.map((arg, index) => {
+        console.log(`\nProcessing Argument ${index}:`);
+        console.log("  Raw value:", arg);
+        console.log("  Type:", typeof arg);
+        console.log("  Is Array:", Array.isArray(arg));
+        
+        // If it's a numeric string that should be a u64/u128, ensure it's properly formatted
+        if (typeof arg === 'string' && /^\d+$/.test(arg)) {
+          console.log("  Detected as numeric string");
+          console.log("  Value length:", arg.length);
+          console.log("  As BigInt:", BigInt(arg).toString());
+          // Return as string for large numbers (u64/u128)
+          return arg;
+        }
+        
+        // If it's an array (like hash bytes), ensure proper formatting
+        if (Array.isArray(arg)) {
+          console.log("  Array length:", arg.length);
+          console.log("  First few elements:", arg.slice(0, 5));
+          return arg;
+        }
+        
+        return arg;
+      }) || [];
+
       const transaction = {
-        arguments: payload.functionArguments || [],
+        arguments: processedArguments,
         function: payload.function,
         type: "entry_function_payload" as const,
         type_arguments: payload.typeArguments || [],
       };
 
-      const pendingTransaction = await wallet.signAndSubmitTransaction(transaction);
+      console.log("\nProcessed transaction:", JSON.stringify(transaction, null, 2));
+      
+      // Apply OKX wallet fix
+      const preparedTransaction = prepareOKXAptosTransaction(transaction);
+      console.log("\nAfter OKX fix:", JSON.stringify(preparedTransaction, null, 2));
+      console.log("=== End Debug ===");
+
+      // Add a try-catch specifically for the wallet call
+      let pendingTransaction;
+      try {
+        pendingTransaction = await wallet.signAndSubmitTransaction(preparedTransaction);
+      } catch (walletError: any) {
+        console.error("\n=== OKX Wallet Error ===");
+        console.error("Error type:", walletError.constructor.name);
+        console.error("Error message:", walletError.message);
+        console.error("Error code:", walletError.code);
+        console.error("Full error:", walletError);
+        
+        // Check if it's the BigInt conversion error
+        if (walletError.message && walletError.message.includes('Cannot convert') && walletError.message.includes('to BigInt')) {
+          console.error("\nThis appears to be a BigInt conversion error inside OKX wallet.");
+          console.error("The wallet might be trying to process the original decimal amount instead of the converted value.");
+        }
+        
+        throw walletError;
+      }
       
       return { hash: pendingTransaction.hash };
     } catch (error: any) {
-      console.error("Transaction failed:", error);
+      console.error("\nTransaction failed:", error);
+      console.error("Error details:", error.message, error.code);
       throw error;
     }
   }

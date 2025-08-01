@@ -24,6 +24,7 @@ import {
   NON_EVM_CHAINS,
   type Token,
 } from "@/config/tokens";
+import { validateAptosAmount } from "@/utils/okxWalletFix";
 
 export default function SwapInterface() {
   const { isConnected, address, chainId, signer } = useWallet();
@@ -204,6 +205,60 @@ export default function SwapInterface() {
   }, [fromAmount, fromChain, toChain, fromToken, toToken]);
 
   const handleSwap = async () => {
+    // Debug: Log the input amount
+    console.log("\n=== Swap Handler Debug ===");
+    console.log("From amount:", fromAmount);
+    console.log("From amount type:", typeof fromAmount);
+    console.log("From chain:", fromChain);
+    console.log("From token:", fromToken);
+    
+    // Special validation for Aptos with OKX wallet
+    if (fromChain === "aptos" && isAptosConnected) {
+      const validation = validateAptosAmount(fromAmount);
+      if (!validation.valid) {
+        setSwapError(validation.error || "Invalid amount for Aptos");
+        return;
+      }
+      
+      // Warn about small amounts
+      const numAmount = parseFloat(fromAmount);
+      if (numAmount < 0.01) {
+        console.warn("Small amount detected. OKX wallet may have issues with amounts less than 0.01 APT");
+        // Optionally show a warning to the user
+        if (numAmount < 0.001) {
+          setSwapError("Amount too small. Please use at least 0.001 APT due to OKX wallet limitations.");
+          return;
+        }
+      }
+    }
+    
+    // Ensure wallet services are set before executing swap
+    if (isOKXConnected) {
+      try {
+        const okxService = getOKXWalletService({
+          name: "Fusion Plus",
+          icon: window.location.origin + "/favicon.ico"
+        });
+        fusionPlusService.setOKXWalletService(okxService);
+      } catch (error) {
+        console.error("Failed to set OKX wallet service:", error);
+      }
+    }
+    
+    if (isAptosConnected) {
+      try {
+        const aptosService = getOKXAptosService({
+          name: "Fusion Plus",
+          icon: window.location.origin + "/favicon.ico",
+          network: (process.env.NEXT_PUBLIC_APTOS_NETWORK as 'mainnet' | 'testnet') || "mainnet"
+        });
+        fusionPlusService.setOKXAptosService(aptosService);
+        console.log("OKX Aptos service initialized for mainnet");
+      } catch (error) {
+        console.error("Failed to set OKX Aptos service:", error);
+      }
+    }
+    
     // Determine active wallet
     const activeAddress = address || okxAddress || aptosAddress;
     const activeChainId = chainId || okxChainId || aptosChainId;

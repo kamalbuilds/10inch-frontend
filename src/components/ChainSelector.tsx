@@ -30,7 +30,7 @@ export default function ChainSelector({
   className,
 }: ChainSelectorProps) {
   const [open, setOpen] = useState(false);
-  
+
   const currentChain = chains.find((c) => c.id === selectedChain);
 
   return (
@@ -41,9 +41,9 @@ export default function ChainSelector({
             <>
               <div className="flex items-center gap-2">
                 {currentChain.logoURI ? (
-                  <img 
-                    src={currentChain.logoURI} 
-                    alt={currentChain.name} 
+                  <img
+                    src={currentChain.logoURI}
+                    alt={currentChain.name}
                     className="w-5 h-5 rounded-full"
                   />
                 ) : (
@@ -76,14 +76,14 @@ export default function ChainSelector({
                 onSelect(chain.id);
                 setOpen(false);
               }}
-              className="w-full flex items-center justify-between p-3 hover:bg-muted rounded-lg transition-colors"
+              className="w-full flex items-center justify-between p-3 hover:bg-foreground rounded-lg transition-colors"
             >
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full flex items-center justify-center overflow-hidden bg-muted">
                   {chain.logoURI ? (
-                    <img 
-                      src={chain.logoURI} 
-                      alt={chain.name} 
+                    <img
+                      src={chain.logoURI}
+                      alt={chain.name}
                       className="w-full h-full object-cover"
                     />
                   ) : (

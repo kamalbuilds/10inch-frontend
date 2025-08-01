@@ -45,7 +45,7 @@ export default function LandingPage() {
             >
               Fusion Plus Swap
             </motion.h1>
-            
+
             <motion.div
               variants={itemVariants}
               className="flex flex-col md:flex-row justify-center gap-4"
@@ -99,7 +99,7 @@ export default function LandingPage() {
               <motion.div
                 className="absolute inset-0"
                 initial={{ scale: 0.5 }}
-                animate={{ 
+                animate={{
                   scale: [1, 1.2, 1],
                   opacity: [0.1, 0.3, 0.1]
                 }}

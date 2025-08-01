@@ -89,35 +89,35 @@ export default function TokenSelector({
               </div>
             ) : (
               filteredTokens.map((token) => (
-              <button
-                key={token.address}
-                onClick={() => {
-                  onSelect(token.address);
-                  setOpen(false);
-                  setSearch("");
-                }}
-                className="w-full flex items-center justify-between p-3 hover:bg-muted rounded-lg transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center overflow-hidden">
-                    {token.logoURI ? (
-                      <img src={token.logoURI} alt={token.symbol} className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-xs font-semibold">{token.symbol.slice(0, 2)}</span>
-                    )}
-                  </div>
-                  <div className="text-left">
-                    <div className="font-medium">{token.symbol}</div>
-                    <div className="text-sm text-muted-foreground">
-                      {token.name}
+                <button
+                  key={token.address}
+                  onClick={() => {
+                    onSelect(token.address);
+                    setOpen(false);
+                    setSearch("");
+                  }}
+                  className="w-full flex items-center justify-between p-3 hover:bg-foreground rounded-lg"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center overflow-hidden">
+                      {token.logoURI ? (
+                        <img src={token.logoURI} alt={token.symbol} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-xs font-semibold">{token.symbol.slice(0, 2)}</span>
+                      )}
+                    </div>
+                    <div className="text-left">
+                      <div className="font-medium">{token.symbol.slice(0, 8)}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {token.name.slice(0, 10)}
+                      </div>
                     </div>
                   </div>
-                </div>
-                {(selectedToken === token.symbol || selectedToken === token.address) && (
-                  <Badge variant="secondary">Selected</Badge>
-                )}
-              </button>
-            ))
+                  {(selectedToken === token.symbol || selectedToken === token.address) && (
+                    <Badge variant="secondary">Selected</Badge>
+                  )}
+                </button>
+              ))
             )}
           </div>
         </div>

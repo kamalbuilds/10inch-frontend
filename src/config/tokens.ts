@@ -176,7 +176,7 @@ export const SUPPORTED_CHAINS: ChainConfig[] = [
     },
     rpcUrls: ["https://fullnode.mainnet.sui.io"],
     blockExplorerUrls: ["https://suiexplorer.com"],
-    logoURI: "https://raw.githubusercontent.com/sui-foundation/sui-brand-kit/main/logos/svg/sui-logo-icon.svg",
+    logoURI: "https://assets.coingecko.com/coins/images/26375/standard/sui-ocean-square.png?1727791290",
   },
   {
     id: "near",
@@ -511,7 +511,7 @@ export const DEFAULT_TOKENS: Record<number | string, Token[]> = {
       name: "Sui",
       address: "0x2::sui::SUI",
       decimals: 9,
-      logoURI: "https://raw.githubusercontent.com/sui-foundation/sui-brand-kit/main/logos/svg/sui-logo-icon.svg",
+      logoURI: "https://assets.coingecko.com/coins/images/26375/standard/sui-ocean-square.png?1727791290",
       chainId: "sui",
     },
   ],
@@ -598,7 +598,7 @@ export const DEFAULT_TOKENS: Record<number | string, Token[]> = {
     },
     {
       symbol: "USDT",
-      name: "Tether USD", 
+      name: "Tether USD",
       address: "EQCxE6mUtQJKFnGfaROTKOtYEqW-SjWTSqkw7FrYaA_0_Rov",
       decimals: 6,
       logoURI: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png",
@@ -625,7 +625,7 @@ export const NON_EVM_CHAINS = {
   SUI: {
     name: "Sui",
     id: "sui",
-    logoURI: "https://raw.githubusercontent.com/sui-foundation/sui-brand-kit/main/logos/svg/sui-logo-icon.svg",
+    logoURI: "https://assets.coingecko.com/coins/images/26375/standard/sui-ocean-square.png?1727791290",
   },
   COSMOS: {
     name: "Cosmos",

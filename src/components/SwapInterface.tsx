@@ -27,17 +27,17 @@ import {
 
 export default function SwapInterface() {
   const { isConnected, address, chainId, signer } = useWallet();
-  const { 
-    isConnected: isOKXConnected, 
-    address: okxAddress, 
-    chainId: okxChainId 
+  const {
+    isConnected: isOKXConnected,
+    address: okxAddress,
+    chainId: okxChainId
   } = useOKXWallet();
   const {
     isConnected: isAptosConnected,
     address: aptosAddress,
     chainId: aptosChainId
   } = useAptosWallet();
-  
+
   const [fromChain, setFromChain] = useState<string | number>(1); // Ethereum
   const [toChain, setToChain] = useState<string | number>(137); // Polygon
   const [fromToken, setFromToken] = useState<string>("0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"); // Native ETH
@@ -65,21 +65,19 @@ export default function SwapInterface() {
 
   // Get tokens for a chain
   const getTokensForChain = async (chainId: string | number): Promise<Token[]> => {
-    // Check cache first
     if (chainTokens[chainId]) {
       return chainTokens[chainId];
     }
 
-    // Set loading state
     setLoadingTokens(prev => ({ ...prev, [chainId]: true }));
 
     try {
       const tokens = await fusionPlusService.getTokensForChain(chainId);
+      console.log("tokens >>>", tokens);
       setChainTokens(prev => ({ ...prev, [chainId]: tokens }));
       return tokens;
     } catch (error) {
       console.error('Error loading tokens:', error);
-      // Fallback to static tokens
       const lookupId = typeof chainId === 'string' ? chainId.toLowerCase() : chainId;
       return DEFAULT_TOKENS[lookupId] || [];
     } finally {
@@ -119,7 +117,7 @@ export default function SwapInterface() {
         });
         fusionPlusService.setOKXWalletService(okxService);
       }
-      
+
       if (isAptosConnected) {
         const aptosService = getOKXAptosService({
           name: "Fusion Plus",
@@ -147,7 +145,7 @@ export default function SwapInterface() {
         try {
           const fromChainConfig = SUPPORTED_CHAINS.find(c => c.id === fromChain);
           const toChainConfig = SUPPORTED_CHAINS.find(c => c.id === toChain);
-          
+
           if (!fromChainConfig || !toChainConfig) {
             throw new Error("Invalid chain selection");
           }
@@ -155,27 +153,27 @@ export default function SwapInterface() {
           // Convert chain names for API
           let fromChainName = fromChainConfig.name.toUpperCase();
           let toChainName = toChainConfig.name.toUpperCase();
-          
+
           // Special handling for chain names
           if (fromChainName === 'BNB SMART CHAIN') fromChainName = 'BSC';
           if (toChainName === 'BNB SMART CHAIN') toChainName = 'BSC';
-          
+
           // For non-EVM chains, use token symbols instead of addresses
           let fromTokenParam = fromToken;
           let toTokenParam = toToken;
-          
+
           if (fromChainConfig.type !== 'EVM') {
             // Get token symbol from the token data
             const fromTokenData = chainTokens[fromChain]?.find(t => t.address === fromToken || t.symbol === fromToken);
             fromTokenParam = fromTokenData?.symbol || fromToken;
           }
-          
+
           if (toChainConfig.type !== 'EVM') {
             // Get token symbol from the token data
             const toTokenData = chainTokens[toChain]?.find(t => t.address === toToken || t.symbol === toToken);
             toTokenParam = toTokenData?.symbol || toToken;
           }
-          
+
           const quote = await fusionPlusService.getSwapQuote({
             fromChain: fromChainName,
             toChain: toChainName,
@@ -194,7 +192,7 @@ export default function SwapInterface() {
           setQuoteLoading(false);
         }
       };
-      
+
       const debounceTimer = setTimeout(updateQuote, 500);
       return () => clearTimeout(debounceTimer);
     } else {
@@ -210,36 +208,36 @@ export default function SwapInterface() {
     const activeAddress = address || okxAddress || aptosAddress;
     const activeChainId = chainId || okxChainId || aptosChainId;
     const isAnyWalletConnected = isConnected || isOKXConnected || isAptosConnected;
-    
+
     console.log("Swap button clicked:", { isConnected, isOKXConnected, isAptosConnected, signer, activeAddress });
-    
+
     const fromChainConfig = SUPPORTED_CHAINS.find(c => c.id === fromChain);
     const toChainConfig = SUPPORTED_CHAINS.find(c => c.id === toChain);
-    
+
     // For EVM chains, check wallet connection
     if (fromChainConfig?.type === 'EVM' && (!isConnected || !signer)) {
       setSwapError("Please connect your wallet first");
       return;
     }
-    
+
     // For TON chain, check OKX wallet connection
     if (fromChainConfig?.type === 'TON' && !isOKXConnected) {
       setSwapError("Please connect your OKX wallet for TON transactions");
       return;
     }
-    
+
     // For Aptos chain, check OKX wallet connection
     if (fromChainConfig?.type === 'APTOS' && !isAptosConnected) {
       setSwapError("Please connect your OKX wallet for Aptos transactions");
       return;
     }
-    
+
     // For other non-EVM chains, check if we have an address (even if no signer)
     if (fromChainConfig?.type !== 'EVM' && fromChainConfig?.type !== 'TON' && fromChainConfig?.type !== 'APTOS' && !activeAddress && !recipientAddress) {
       setSwapError("Please connect your wallet or provide a recipient address");
       return;
     }
-    
+
     if (!fromChainConfig || !toChainConfig) {
       setSwapError("Invalid chain selection");
       return;
@@ -267,7 +265,7 @@ export default function SwapInterface() {
         },
         fromChainConfig.type === 'EVM' ? signer || undefined : undefined
       );
-      
+
       alert(`Swap initiated! ID: ${swapId}`);
       // Reset form
       setFromAmount("");
@@ -332,9 +330,7 @@ export default function SwapInterface() {
                     selectedChain={fromChain}
                     onSelect={async (chainId) => {
                       setFromChain(chainId);
-                      // Load tokens for the new chain
                       await getTokensForChain(chainId);
-                      // Select native token by default
                       setFromToken('0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee');
                     }}
                     className="bg-[#0a192f] text-white"
@@ -350,10 +346,15 @@ export default function SwapInterface() {
                 </div>
                 <div className="flex items-center gap-3 mt-3">
                   <Input
-                    type="number"
                     placeholder="0.00"
                     value={fromAmount}
-                    onChange={(e) => setFromAmount(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // Only allow numbers, decimals, and empty string
+                      if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                        setFromAmount(value);
+                      }
+                    }}
                     className="flex-1 bg-[#0a192f] text-white border-[#1e2a47] focus-visible:ring-2 focus-visible:ring-blue-500"
                   />
                 </div>
@@ -400,7 +401,6 @@ export default function SwapInterface() {
                 </div>
                 <div className="flex items-center gap-3 mt-3">
                   <Input
-                    type="number"
                     placeholder="0.00"
                     value={quoteLoading ? "Loading..." : toAmount}
                     className="flex-1 bg-[#0a192f] text-white border-[#1e2a47] focus-visible:ring-2 focus-visible:ring-blue-500"
@@ -481,12 +481,12 @@ export default function SwapInterface() {
               <Button
                 disabled={(() => {
                   const fromChainConfig = SUPPORTED_CHAINS.find(c => c.id === fromChain);
-                  
+
                   // Check if wallet is connected based on chain type
                   const isWalletConnected = fromChainConfig?.type === 'TON' ? isOKXConnected :
-                                          fromChainConfig?.type === 'APTOS' ? isAptosConnected :
-                                          isConnected; // For EVM and other chains
-                  
+                    fromChainConfig?.type === 'APTOS' ? isAptosConnected :
+                      isConnected; // For EVM and other chains
+
                   const conditions = {
                     notConnected: !isWalletConnected,
                     noFromAmount: !fromAmount,
@@ -494,13 +494,13 @@ export default function SwapInterface() {
                     isLoading: isLoading,
                     quoteLoading: quoteLoading
                   };
-                  
-                  const isDisabled = !isWalletConnected || 
-                    !fromAmount || 
-                    parseFloat(fromAmount) <= 0 || 
-                    isLoading || 
+
+                  const isDisabled = !isWalletConnected ||
+                    !fromAmount ||
+                    parseFloat(fromAmount) <= 0 ||
+                    isLoading ||
                     quoteLoading;
-                  
+
                   const walletStates = {
                     evmConnected: isConnected,
                     okxTonConnected: isOKXConnected,
@@ -508,7 +508,7 @@ export default function SwapInterface() {
                     fromChainType: fromChainConfig?.type,
                     fromChainId: fromChain
                   };
-                  
+
                   console.log('Swap Button Disabled Debug:', {
                     isDisabled,
                     conditions,
@@ -519,7 +519,7 @@ export default function SwapInterface() {
                     isLoading,
                     quoteLoading
                   });
-                  
+
                   return isDisabled;
                 })()}
                 onClick={handleSwap}
@@ -552,14 +552,14 @@ export default function SwapInterface() {
               </p>
               <div className="flex gap-2 flex-wrap">
                 {SUPPORTED_CHAINS.filter(chain => chain.type && chain.type !== 'EVM').map((chain) => (
-                  <Badge 
-                    key={chain.id} 
+                  <Badge
+                    key={chain.id}
                     variant="outline"
                     className="border-[#2a3f5f] text-gray-300 hover:bg-[#1e2a47] transition-colors"
                   >
-                    <img 
-                      src={chain.logoURI} 
-                      alt={chain.name} 
+                    <img
+                      src={chain.logoURI}
+                      alt={chain.name}
                       className="w-4 h-4 mr-1 rounded-full"
                     />
                     {chain.name}

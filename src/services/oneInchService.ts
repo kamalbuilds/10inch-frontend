@@ -1,8 +1,8 @@
-import axios, { AxiosInstance } from 'axios';
-
 // 1inch API configuration
 const ONE_INCH_API_KEY = process.env.NEXT_PUBLIC_ONE_INCH_API_KEY || '';
-const ONE_INCH_BASE_URL = 'https://api.1inch.dev';
+
+// Backend API configuration
+const BACKEND_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3000';
 
 // Chain IDs supported by 1inch
 export const ONE_INCH_CHAINS = {
@@ -63,32 +63,47 @@ export interface BalanceParams {
 }
 
 class OneInchService {
-  private axiosInstance: AxiosInstance;
   private chainId: number;
 
   constructor(chainId: number = ONE_INCH_CHAINS.ETHEREUM) {
     this.chainId = chainId;
-    this.axiosInstance = axios.create({
-      baseURL: ONE_INCH_BASE_URL,
-      headers: {
-        'Authorization': `Bearer ${ONE_INCH_API_KEY}`,
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-    });
   }
 
   setChainId(chainId: number) {
     this.chainId = chainId;
   }
 
+  // Helper function to make API calls to our backend
+  private async makeApiCall(endpoint: string, params?: Record<string, any>): Promise<any> {
+    const url = new URL(endpoint, BACKEND_BASE_URL);
+
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          url.searchParams.append(key, value.toString());
+        }
+      });
+    }
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status} ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
   // Token API
   async getTokenList(): Promise<Record<string, TokenInfo>> {
     try {
-      const response = await this.axiosInstance.get(
-        `/token/v1.2/${this.chainId}`
-      );
-      return response.data;
+      const response = await this.makeApiCall('/api/1inch/tokens', { chainId: this.chainId });
+      return response.tokens;
     } catch (error) {
       console.error('Error fetching token list:', error);
       throw error;
@@ -97,11 +112,7 @@ class OneInchService {
 
   async searchTokens(query: string): Promise<TokenInfo[]> {
     try {
-      const response = await this.axiosInstance.get(
-        `/token/v1.2/${this.chainId}/search`,
-        { params: { query } }
-      );
-      return response.data;
+      return await this.makeApiCall('/api/1inch/tokens/search', { chainId: this.chainId, query });
     } catch (error) {
       console.error('Error searching tokens:', error);
       throw error;
@@ -110,11 +121,20 @@ class OneInchService {
 
   async getCustomTokens(addresses: string[]): Promise<Record<string, TokenInfo>> {
     try {
-      const response = await this.axiosInstance.post(
-        `/token/v1.2/${this.chainId}/custom`,
-        { addresses }
-      );
-      return response.data;
+      const response = await fetch('/api/1inch/tokens/custom', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ chainId: this.chainId, addresses }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status} ${response.statusText}`);
+      }
+
+      return response.json();
     } catch (error) {
       console.error('Error fetching custom tokens:', error);
       throw error;
@@ -124,11 +144,12 @@ class OneInchService {
   // Balance API
   async getBalances(params: BalanceParams): Promise<Record<string, string>> {
     try {
-      const response = await this.axiosInstance.get(
-        `/balance/v1.2/${this.chainId}/balances/${params.walletAddress}`,
-        { params: { contractAddresses: params.contractAddresses?.join(',') } }
-      );
-      return response.data;
+      const apiParams: Record<string, any> = { chainId: this.chainId, ...params };
+      if (params.contractAddresses) {
+        apiParams.contractAddresses = params.contractAddresses.join(',');
+      }
+
+      return await this.makeApiCall('/api/1inch/balances', apiParams);
     } catch (error) {
       console.error('Error fetching balances:', error);
       throw error;
@@ -140,11 +161,12 @@ class OneInchService {
     contractAddresses?: string[]
   ): Promise<Record<string, Record<string, string>>> {
     try {
-      const response = await this.axiosInstance.get(
-        `/balance/v1.2/${this.chainId}/allowances/${walletAddress}`,
-        { params: { contractAddresses: contractAddresses?.join(',') } }
-      );
-      return response.data;
+      const params: Record<string, any> = { chainId: this.chainId, walletAddress };
+      if (contractAddresses) {
+        params.contractAddresses = contractAddresses.join(',');
+      }
+
+      return await this.makeApiCall('/api/1inch/allowances', params);
     } catch (error) {
       console.error('Error fetching allowances:', error);
       throw error;
@@ -154,11 +176,7 @@ class OneInchService {
   // Swap API
   async getQuote(params: QuoteParams): Promise<any> {
     try {
-      const response = await this.axiosInstance.get(
-        `/swap/v6.0/${this.chainId}/quote`,
-        { params }
-      );
-      return response.data;
+      return await this.makeApiCall('/api/1inch/quote', { chainId: this.chainId, ...params });
     } catch (error) {
       console.error('Error fetching quote:', error);
       throw error;
@@ -167,11 +185,7 @@ class OneInchService {
 
   async buildSwapTransaction(params: SwapParams): Promise<any> {
     try {
-      const response = await this.axiosInstance.get(
-        `/swap/v6.0/${this.chainId}/swap`,
-        { params }
-      );
-      return response.data;
+      return await this.makeApiCall('/api/1inch/swap', { chainId: this.chainId, ...params });
     } catch (error) {
       console.error('Error building swap transaction:', error);
       throw error;
@@ -181,10 +195,7 @@ class OneInchService {
   // Gas Price API
   async getGasPrice(): Promise<any> {
     try {
-      const response = await this.axiosInstance.get(
-        `/gas-price/v1.5/${this.chainId}`
-      );
-      return response.data;
+      return await this.makeApiCall('/api/1inch/gas-price', { chainId: this.chainId });
     } catch (error) {
       console.error('Error fetching gas price:', error);
       throw error;
@@ -197,16 +208,13 @@ class OneInchService {
     amount?: string
   ): Promise<any> {
     try {
-      const response = await this.axiosInstance.get(
-        `/approve/v1.1/${this.chainId}/approve/transaction`,
-        { 
-          params: { 
-            tokenAddress,
-            amount: amount || '115792089237316195423570985008687907853269984665640564039457584007913129639935' // max uint256
-          } 
-        }
-      );
-      return response.data;
+      const params = {
+        chainId: this.chainId,
+        tokenAddress,
+        amount: amount || '115792089237316195423570985008687907853269984665640564039457584007913129639935' // max uint256
+      };
+
+      return await this.makeApiCall('/api/1inch/approve/calldata', params);
     } catch (error) {
       console.error('Error fetching approve calldata:', error);
       throw error;
@@ -215,10 +223,7 @@ class OneInchService {
 
   async getApproveSpender(): Promise<{ address: string }> {
     try {
-      const response = await this.axiosInstance.get(
-        `/approve/v1.1/${this.chainId}/approve/spender`
-      );
-      return response.data;
+      return await this.makeApiCall('/api/1inch/approve/spender', { chainId: this.chainId });
     } catch (error) {
       console.error('Error fetching approve spender:', error);
       throw error;
@@ -228,10 +233,7 @@ class OneInchService {
   // Liquidity Sources API
   async getLiquiditySources(): Promise<any> {
     try {
-      const response = await this.axiosInstance.get(
-        `/swap/v6.0/${this.chainId}/liquidity-sources`
-      );
-      return response.data;
+      return await this.makeApiCall('/api/1inch/liquidity-sources', { chainId: this.chainId });
     } catch (error) {
       console.error('Error fetching liquidity sources:', error);
       throw error;

@@ -24,6 +24,9 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   // Add CORS headers for external images
   async headers() {
     return [

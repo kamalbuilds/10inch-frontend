@@ -19,6 +19,7 @@ import {
     Sparkles,
     Layers,
     Network,
+    Coins,
 } from "lucide-react"
 import { Particles } from "./particles"
 import { TypingAnimation } from "./typing-animation"
@@ -26,20 +27,92 @@ import HeroSection from "./HeroSection"
 
 const supportedChains = {
     evm: [
-        { name: "Ethereum", symbol: "ETH", color: "bg-blue-500" },
-        { name: "BSC", symbol: "BNB", color: "bg-yellow-500" },
-        { name: "Polygon", symbol: "MATIC", color: "bg-purple-500" },
-        { name: "Arbitrum", symbol: "ARB", color: "bg-blue-400" },
-        { name: "Optimism", symbol: "OP", color: "bg-red-500" },
-        { name: "Avalanche", symbol: "AVAX", color: "bg-red-400" },
+        {
+            name: "Ethereum",
+            symbol: "ETH",
+            color: "bg-blue-500",
+            logoURI: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png",
+            tokens: ["USDC", "USDT", "DAI", "WETH"]
+        },
+        {
+            name: "BSC",
+            symbol: "BNB",
+            color: "bg-yellow-500",
+            logoURI: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/smartchain/info/logo.png",
+            tokens: ["USDT", "BUSD", "WBNB"]
+        },
+        {
+            name: "Polygon",
+            symbol: "MATIC",
+            color: "bg-purple-500",
+            logoURI: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png",
+            tokens: ["USDC", "USDT", "WMATIC"]
+        },
+        {
+            name: "Arbitrum",
+            symbol: "ARB",
+            color: "bg-blue-400",
+            logoURI: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png",
+            tokens: ["USDC", "USDT", "WETH"]
+        },
+        {
+            name: "Optimism",
+            symbol: "OP",
+            color: "bg-red-500",
+            logoURI: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/optimism/info/logo.png",
+            tokens: ["USDC", "USDT", "WETH"]
+        },
+        {
+            name: "Avalanche",
+            symbol: "AVAX",
+            color: "bg-red-400",
+            logoURI: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/info/logo.png",
+            tokens: ["USDC", "USDT", "WAVAX"]
+        },
     ],
     nonEvm: [
-        { name: "Aptos", symbol: "APT", color: "bg-green-500" },
-        { name: "Sui", symbol: "SUI", color: "bg-cyan-500" },
-        { name: "Cosmos", symbol: "ATOM", color: "bg-indigo-500" },
-        { name: "Stellar", symbol: "XLM", color: "bg-blue-600" },
-        { name: "Tron", symbol: "TRX", color: "bg-red-600" },
-        { name: "TON", symbol: "TON", color: "bg-blue-700" },
+        {
+            name: "Aptos",
+            symbol: "APT",
+            color: "bg-green-500",
+            logoURI: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/aptos/info/logo.png",
+            tokens: ["USDC", "APT"]
+        },
+        {
+            name: "Sui",
+            symbol: "SUI",
+            color: "bg-cyan-500",
+            logoURI: "https://assets.coingecko.com/coins/images/26375/standard/sui-ocean-square.png?1727791290",
+            tokens: ["USDC", "SUI"]
+        },
+        {
+            name: "Cosmos",
+            symbol: "ATOM",
+            color: "bg-indigo-500",
+            logoURI: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/cosmos/info/logo.png",
+            tokens: ["ATOM", "USDC"]
+        },
+        {
+            name: "Stellar",
+            symbol: "XLM",
+            color: "bg-blue-600",
+            logoURI: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/stellar/info/logo.png",
+            tokens: ["USDC", "XLM"]
+        },
+        {
+            name: "Tron",
+            symbol: "TRX",
+            color: "bg-red-600",
+            logoURI: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/tron/info/logo.png",
+            tokens: ["USDT", "TRX"]
+        },
+        {
+            name: "TON",
+            symbol: "TON",
+            color: "bg-blue-700",
+            logoURI: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ton/info/logo.png",
+            tokens: ["TON", "USDT", "USDC"]
+        },
     ],
 }
 
@@ -168,7 +241,10 @@ export default function LandingPage() {
                                         </div>
                                         <div>
                                             <h3 className="text-2xl font-bold text-white mb-1">EVM Chains</h3>
-                                            <p className="text-blue-300">Ethereum Virtual Machine Compatible</p>
+                                            <p className="text-blue-300 flex items-center">
+                                                <Coins className="w-4 h-4 mr-2" />
+                                                Ethereum Virtual Machine Compatible
+                                            </p>
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
@@ -177,10 +253,22 @@ export default function LandingPage() {
                                                 key={chain.name}
                                                 className="relative flex items-center space-x-3 p-4 rounded-xl bg-black/20 border border-gray-700/50 backdrop-blur-sm group/item overflow-hidden hover:scale-105 hover:bg-blue-500/10 hover:border-blue-500/30 transition-all duration-300"
                                             >
-                                                <div
-                                                    className={`relative w-10 h-10 ${chain.color} rounded-full flex items-center justify-center text-white text-sm font-bold shadow-lg`}
-                                                >
-                                                    {chain.symbol.slice(0, 2)}
+                                                <div className="relative w-10 h-10 rounded-full flex items-center justify-center shadow-lg overflow-hidden">
+                                                    <img
+                                                        src={chain.logoURI}
+                                                        alt={chain.name}
+                                                        className="w-full h-full object-cover"
+                                                        onError={(e) => {
+                                                            const target = e.target as HTMLImageElement;
+                                                            target.style.display = 'none';
+                                                            target.nextElementSibling?.classList.remove('hidden');
+                                                        }}
+                                                    />
+                                                    <div
+                                                        className={`absolute inset-0 ${chain.color} flex items-center justify-center text-white text-sm font-bold hidden`}
+                                                    >
+                                                        {chain.symbol.slice(0, 2)}
+                                                    </div>
                                                     <div className="absolute inset-0 rounded-full border-2 border-white/30 animate-spin-slow" />
                                                 </div>
                                                 <span className="text-white font-medium relative z-10">{chain.name}</span>
@@ -205,7 +293,10 @@ export default function LandingPage() {
                                         </div>
                                         <div>
                                             <h3 className="text-2xl font-bold text-white mb-1">Non-EVM Chains</h3>
-                                            <p className="text-purple-300">Alternative Blockchain Architectures</p>
+                                            <p className="text-purple-300 flex items-center">
+                                                <Coins className="w-4 h-4 mr-2" />
+                                                Alternative Blockchain Architectures
+                                            </p>
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
@@ -214,10 +305,22 @@ export default function LandingPage() {
                                                 key={chain.name}
                                                 className="relative flex items-center space-x-3 p-4 rounded-xl bg-black/20 border border-gray-700/50 backdrop-blur-sm group/item overflow-hidden hover:scale-105 hover:bg-purple-500/10 hover:border-purple-500/30 transition-all duration-300"
                                             >
-                                                <div
-                                                    className={`relative w-10 h-10 ${chain.color} rounded-full flex items-center justify-center text-white text-sm font-bold shadow-lg`}
-                                                >
-                                                    {chain.symbol.slice(0, 2)}
+                                                <div className="relative w-10 h-10 rounded-full flex items-center justify-center shadow-lg overflow-hidden">
+                                                    <img
+                                                        src={chain.logoURI}
+                                                        alt={chain.name}
+                                                        className="w-full h-full object-cover"
+                                                        onError={(e) => {
+                                                            const target = e.target as HTMLImageElement;
+                                                            target.style.display = 'none';
+                                                            target.nextElementSibling?.classList.remove('hidden');
+                                                        }}
+                                                    />
+                                                    <div
+                                                        className={`absolute inset-0 ${chain.color} flex items-center justify-center text-white text-sm font-bold hidden`}
+                                                    >
+                                                        {chain.symbol.slice(0, 2)}
+                                                    </div>
                                                     <div
                                                         className="absolute inset-0 rounded-full border-2 border-white/30 animate-spin-slow"
                                                         style={{ animationDirection: "reverse" }}
